@@ -8,6 +8,7 @@
   "scripts": {
     "build": "nest build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
+    "generate:typings": "ts-node generate-typings.ts",
     "start": "nest start",
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
@@ -20,14 +21,20 @@
     "test:e2e": "jest --config ./test/jest-e2e.json"
   },
   "dependencies": {
+    "@apollo/server": "^4.11.2",
+    "@nestjs/apollo": "^12.2.1",
     "@nestjs/common": "^10.0.0",
     "@nestjs/core": "^10.0.0",
+    "@nestjs/graphql": "^12.2.1",
     "@nestjs/platform-express": "^10.0.0",
     "@nestjs/typeorm": "^10.0.2",
     "class-validator": "^0.14.1",
+    "graphql": "^16.9.0",
+    "graphql-subscriptions": "^2.0.0",
     "mysql2": "^3.11.4",
     "reflect-metadata": "^0.2.0",
     "rxjs": "^7.8.1",
+    "ts-morph": "^24.0.0",
     "typeorm": "^0.3.20"
   },
   "devDependencies": {
