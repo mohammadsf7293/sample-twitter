@@ -1,0 +1,34 @@
+# Import the User type from the user.graphql file
+#import "../users/user.graphql"
+
+type Query {
+  groups: [Group]
+  group(id: ID!): Group
+}
+
+type Mutation {
+  createGroup(createGroupInput: CreateGroupInput): Group
+}
+
+type Group {
+  id: Int
+  name: String
+  users: [User]
+  childGroups: [Group]
+  parentGroup: Group
+  creator: User
+  createdAt: String
+  updatedAt: String
+}
+
+type Subscription {
+  groupCreated: Group
+}
+
+# Input types for creating a group
+input CreateGroupInput {
+  name: String
+  userIds: [ID!]
+  parentGroupId: ID
+  creatorId: ID!
+}

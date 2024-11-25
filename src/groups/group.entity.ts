@@ -8,6 +8,7 @@ import {
   JoinColumn,
   CreateDateColumn,
   UpdateDateColumn,
+  OneToMany,
 } from 'typeorm';
 import { User } from '../users/user.entity';
 
@@ -24,14 +25,16 @@ export class Group {
   @JoinTable()
   users: Partial<User>[];
 
-  // Self-referential Many-to-Many relationship for child groups
-  @ManyToMany(() => Group, (group) => group.parentGroups)
-  @JoinTable()
-  childGroups: Group[];
+  // Self-referential Many-to-One relationship for the parent group
+  // A group can have one parent or be orphan
+  @ManyToOne(() => Group, (group) => group.childGroups, { nullable: true })
+  @JoinColumn({ name: 'parentGroupId' }) // Foreign key column for the parent
+  parentGroup: Group;
 
-  // Self-referential Many-to-Many relationship for parent groups
-  @ManyToMany(() => Group, (group) => group.childGroups)
-  parentGroups: Group[];
+  // Self-referential One-to-Many relationship for child groups
+  // A group can have multiple children
+  @OneToMany(() => Group, (group) => group.parentGroup)
+  childGroups: Group[];
 
   // Many-to-One relationship with User (creator of the group)
   @ManyToOne(() => User, { nullable: false })

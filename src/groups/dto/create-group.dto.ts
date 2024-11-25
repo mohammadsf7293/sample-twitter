@@ -1,19 +1,21 @@
 import { IsArray, IsNumber, IsOptional, IsString } from 'class-validator';
 
 export class CreateGroupDto {
-  @IsOptional() // Make it optional if you want to let the database generate it
+  @IsOptional()
   @IsNumber()
   readonly id?: number;
 
-  @IsArray()
-  @IsString({ each: true })
-  readonly userIds: number[]; // User IDs array
+  @IsString()
+  readonly name: string;
 
   @IsArray()
   @IsNumber({}, { each: true })
-  readonly childGroupIds: number[]; // Child Group IDs array
+  readonly userIds: number[];
 
-  @IsArray()
-  @IsNumber({}, { each: true })
-  readonly parentGroupIds: number[]; // Parent Group IDs array
+  @IsNumber()
+  readonly creatorId: number;
+
+  @IsOptional()
+  @IsNumber()
+  readonly parentGroupId: number | null;
 }

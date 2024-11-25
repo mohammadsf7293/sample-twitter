@@ -31,23 +31,30 @@ export class GroupsService {
   // Method to create a new group
   async create(createGroupDto: CreateGroupDto): Promise<Group> {
     // Find users by their IDs
+    // TODO: argue about this
     const users = await this.userRepository.findBy({
       id: In(createGroupDto.userIds),
     });
-    // Find child groups and parent groups by their IDs
-    const childGroups = await this.groupRepository.findBy({
-      id: In(createGroupDto.childGroupIds),
+
+    const parentGroup = await this.groupRepository.findOneBy({
+      id: createGroupDto.parentGroupId,
     });
-    const parentGroups = await this.groupRepository.findBy({
-      id: In(createGroupDto.parentGroupIds),
+
+    const creator = await this.userRepository.findOneBy({
+      id: createGroupDto.creatorId,
     });
+    //TODO: argue about this, do the same for parent?
+    if (!creator) {
+      throw new Error(`Creator with ID ${createGroupDto.creatorId} not found`);
+    }
 
     // Create the new group
     const group = new Group();
+    group.name = createGroupDto.name;
     group.users = users;
-    group.childGroups = childGroups;
-    group.parentGroups = parentGroups;
+    group.parentGroup = parentGroup;
+    group.creator = creator;
 
-    return this.groupRepository.save(group); // Save the new group to the database
+    return this.groupRepository.save(group);
   }
 }
