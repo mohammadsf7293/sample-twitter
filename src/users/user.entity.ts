@@ -1,4 +1,11 @@
-import { Entity, PrimaryGeneratedColumn, Column, ManyToMany } from 'typeorm';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  ManyToMany,
+  CreateDateColumn,
+  UpdateDateColumn,
+} from 'typeorm';
 import { Group } from '../groups/group.entity';
 
 @Entity()
@@ -21,4 +28,12 @@ export class User {
   // Many-to-Many relationship with Group
   @ManyToMany(() => Group, (group) => group.users)
   groups: Group[];
+
+  // Automatically set the creation timestamp
+  @CreateDateColumn()
+  createdAt: Date;
+
+  // Automatically update the timestamp whenever the entity is updated
+  @UpdateDateColumn()
+  updatedAt: Date;
 }
