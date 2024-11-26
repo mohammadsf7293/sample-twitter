@@ -1,0 +1,60 @@
+scalar Date
+
+type Query {
+  # Fetch all tweets
+  tweets: [Tweet!]!
+
+  # Fetch a single tweet by its ID
+  tweet(id: ID!): Tweet
+
+  # Fetch tweets by a specific author
+  tweetsByAuthor(authorId: ID!): [Tweet!]!
+}
+
+type Mutation {
+  # Create a new tweet
+  createTweet(createTweetInput: CreateTweetInput!): Tweet!
+
+  # Update an existing tweet
+  updateTweet(id: ID!, input: UpdateTweetInput!): Tweet!
+
+  # Remove a tweet
+  removeTweet(id: ID!): Boolean!
+}
+
+# Tweet type definition with create and update timestamps
+type Tweet {
+  id: ID!
+  content: String!
+  author: User!  # User type will be imported from user module
+  hashtags: [Hashtag!]!
+  location: String
+  category: String
+  parentTweet: Tweet
+  childTweets: [Tweet!]!
+  createTime: Date!
+  updateTime: Date!
+}
+
+# Hashtag type definition
+type Hashtag {
+  id: ID!
+  name: String!
+}
+
+# Input type for creating a tweet
+input CreateTweetInput {
+  content: String!
+  authorId: ID!
+  hashtags: [String!]!
+  location: String
+  category: String
+  parentTweetId: ID
+}
+
+# Input type for updating a tweet
+input UpdateTweetInput {
+  content: String
+  location: String
+  category: String
+}

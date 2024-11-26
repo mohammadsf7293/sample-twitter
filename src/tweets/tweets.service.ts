@@ -21,9 +21,9 @@ export class TweetsService {
   ) {}
 
   async create(createTweetDto: CreateTweetDto): Promise<Tweet> {
+    console.log(createTweetDto);
     const { content, authorId, parentTweetId, hashtags, location, category } =
       createTweetDto;
-
     const author = await this.userRepository.findOne({
       where: { id: authorId },
     });
