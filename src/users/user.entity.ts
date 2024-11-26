@@ -5,8 +5,10 @@ import {
   ManyToMany,
   CreateDateColumn,
   UpdateDateColumn,
+  OneToMany,
 } from 'typeorm';
 import { Group } from '../groups/group.entity';
+import { Tweet } from '../tweets/tweet.entity';
 
 @Entity()
 export class User {
@@ -28,6 +30,9 @@ export class User {
   // Many-to-Many relationship with Group
   @ManyToMany(() => Group, (group) => group.users)
   groups: Group[];
+
+  @OneToMany(() => Tweet, (tweet) => tweet.author)
+  tweets: Tweet[];
 
   // Automatically set the creation timestamp
   @CreateDateColumn()
