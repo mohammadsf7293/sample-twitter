@@ -10,6 +10,8 @@ type Mutation {
   createGroup(createGroupInput: CreateGroupInput): Group
 }
 
+scalar Date
+
 type Group {
   id: Int
   name: String
@@ -17,8 +19,8 @@ type Group {
   childGroups: [Group]
   parentGroup: Group
   creator: User
-  createdAt: String
-  updatedAt: String
+  createdAt: Date
+  updatedAt: Date
 }
 
 type Subscription {

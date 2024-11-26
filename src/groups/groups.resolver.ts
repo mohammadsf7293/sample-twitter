@@ -1,7 +1,7 @@
 import { ParseIntPipe } from '@nestjs/common';
 import { Args, Mutation, Query, Resolver, Subscription } from '@nestjs/graphql';
 import { PubSub } from 'graphql-subscriptions';
-import { User } from '../graphql.schema';
+import { Group } from '../graphql.schema';
 import { GroupsService } from './groups.service';
 import { CreateGroupDto } from './dto/create-group.dto';
 
@@ -20,12 +20,12 @@ export class GroupsResolver {
   async findOneById(
     @Args('id', ParseIntPipe)
     id: number,
-  ): Promise<User> {
+  ): Promise<Group> {
     return this.groupsService.findOne(id);
   }
 
   @Mutation('createGroup')
-  async create(@Args('createGroupInput') args: CreateGroupDto): Promise<User> {
+  async create(@Args('createGroupInput') args: CreateGroupDto): Promise<Group> {
     const createdGroup = await this.groupsService.create(args);
     pubSub.publish('groupCreated', { groupCreated: createdGroup });
     return createdGroup;

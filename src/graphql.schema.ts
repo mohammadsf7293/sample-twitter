@@ -44,8 +44,8 @@ export class Group {
     childGroups?: Nullable<Nullable<Group>[]>;
     parentGroup?: Nullable<Group>;
     creator?: Nullable<User>;
-    createdAt?: Nullable<string>;
-    updatedAt?: Nullable<string>;
+    createdAt?: Nullable<Date>;
+    updatedAt?: Nullable<Date>;
 }
 
 export abstract class ISubscription {
