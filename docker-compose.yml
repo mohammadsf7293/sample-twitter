@@ -9,6 +9,7 @@ services:
       MYSQL_DATABASE: test
     ports:
       - "3306:3306"
+
   db-test:
     image: mysql:8
     restart: always
@@ -17,3 +18,9 @@ services:
       MYSQL_DATABASE: test
     ports:
       - "3307:3306"
+
+  redis:
+    image: redis:7
+    restart: always
+    ports:
+      - "6379:6379"

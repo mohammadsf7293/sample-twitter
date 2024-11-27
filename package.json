@@ -34,6 +34,7 @@
     "graphql": "^16.9.0",
     "graphql-import": "^1.0.2",
     "graphql-subscriptions": "^2.0.0",
+    "ioredis": "^5.4.1",
     "mysql2": "^3.11.4",
     "reflect-metadata": "^0.2.0",
     "rxjs": "^7.8.1",
