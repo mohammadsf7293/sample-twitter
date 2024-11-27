@@ -1,9 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { RedisService } from './redis.service';
+import { CacheService } from './cache.service';
 import { Redis } from 'ioredis';
 
-describe('RedisService (Integration)', () => {
-  let service: RedisService;
+describe('CacheService (Integration)', () => {
+  let service: CacheService;
   let redisClient: Redis;
 
   beforeAll(async () => {
@@ -16,7 +16,7 @@ describe('RedisService (Integration)', () => {
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
-        RedisService,
+        CacheService,
         {
           provide: 'REDIS',
           useValue: redisClient,
@@ -24,10 +24,10 @@ describe('RedisService (Integration)', () => {
       ],
     }).compile();
 
-    service = module.get<RedisService>(RedisService);
+    service = module.get<CacheService>(CacheService);
 
     // Flushing redis to make sure we have a stateless integration test
-    service.flushAll();
+    service.flushDB();
   });
 
   afterAll(async () => {

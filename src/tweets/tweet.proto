@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+message Hashtag {
+  string name = 1;
+}
+
+message Tweet {
+  string id = 1;
+  string content = 2;
+  string location = 3;
+  string category = 4;
+  string authorId = 5;
+  repeated Hashtag hashtags = 6;
+}

@@ -6,6 +6,9 @@ import { User } from '../users/user.entity';
 import { Hashtag } from './hashtag.entity';
 import { CreateTweetDto } from './dto/create-tweet.dto';
 import { UpdateTweetDto } from './dto/update-tweet.dto';
+import { CacheService } from '../cache/cache.service';
+import * as protobuf from 'protobufjs';
+import * as path from 'path';
 
 @Injectable()
 export class TweetsService {
@@ -18,12 +21,14 @@ export class TweetsService {
 
     @InjectRepository(Hashtag)
     private readonly hashtagRepository: Repository<Hashtag>,
+
+    private readonly CacheService: CacheService, // Inject CacheService
   ) {}
 
   async create(createTweetDto: CreateTweetDto): Promise<Tweet> {
-    console.log(createTweetDto);
     const { content, authorId, parentTweetId, hashtags, location, category } =
       createTweetDto;
+
     const author = await this.userRepository.findOne({
       where: { id: authorId },
     });
@@ -73,7 +78,28 @@ export class TweetsService {
     tweet.category = category;
 
     // Save the tweet to the database
-    return this.tweetRepository.save(tweet);
+    const savedTweet = await this.tweetRepository.save(tweet);
+
+    // Serialize the tweet to protobuf
+    const TweetProto = await protobuf.load(path.join(__dirname, 'tweet.proto'));
+    const TweetType = TweetProto.lookupType('Tweet');
+    const encodedTweet = TweetType.encode({
+      id: savedTweet.id,
+      content: savedTweet.content,
+      authorId: savedTweet.author.id,
+      hashtags: savedTweet.hashtags.map((h) => h.name),
+      location: savedTweet.location,
+      category: savedTweet.category,
+    }).finish();
+
+    const encodedTweetString = encodedTweet.toString();
+    // Store serialized tweet in Redis
+    await this.CacheService.setValue(
+      `cache:tweet:${savedTweet.id}`,
+      encodedTweetString,
+    );
+
+    return savedTweet;
   }
 
   findAll(): Promise<Tweet[]> {

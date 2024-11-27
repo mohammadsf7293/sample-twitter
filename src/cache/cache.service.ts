@@ -2,7 +2,7 @@ import { Injectable, Inject } from '@nestjs/common';
 import * as Redis from 'ioredis';
 
 @Injectable()
-export class RedisService {
+export class CacheService {
   constructor(@Inject('REDIS') private readonly redis: Redis.Redis) {}
 
   async setValue(key: string, value: string): Promise<void> {
@@ -14,7 +14,7 @@ export class RedisService {
   }
 
   //Attention: just must be used for clearing test redis for running tests!
-  async flushAll(): Promise<string> {
+  async flushDB(): Promise<string> {
     return await this.redis.flushall();
   }
 }

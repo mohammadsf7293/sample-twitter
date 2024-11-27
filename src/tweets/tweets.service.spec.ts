@@ -7,6 +7,7 @@ import { User } from '../users/user.entity';
 import { Hashtag } from './hashtag.entity';
 import { CreateTweetDto } from './dto/create-tweet.dto';
 import { UpdateTweetDto } from './dto/update-tweet.dto';
+import { CacheService } from '../cache/cache.service';
 
 const mockTweetRepository = {
   create: jest.fn(),
@@ -26,11 +27,16 @@ const mockHashtagRepository = {
   save: jest.fn(),
 };
 
+const mockCacheService = {
+  setValue: jest.fn(),
+};
+
 describe('TweetsService', () => {
   let service: TweetsService;
   let tweetRepository: Repository<Tweet>;
   let userRepository: Repository<User>;
   let hashtagRepository: Repository<Hashtag>;
+  let cacheService: CacheService;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -48,6 +54,10 @@ describe('TweetsService', () => {
           provide: getRepositoryToken(Hashtag),
           useValue: mockHashtagRepository,
         },
+        {
+          provide: CacheService,
+          useValue: mockCacheService,
+        },
       ],
     }).compile();
 
@@ -57,6 +67,7 @@ describe('TweetsService', () => {
     hashtagRepository = module.get<Repository<Hashtag>>(
       getRepositoryToken(Hashtag),
     );
+    cacheService = module.get<CacheService>(CacheService);
   });
 
   it('should be defined', () => {
@@ -64,7 +75,7 @@ describe('TweetsService', () => {
   });
 
   describe('create', () => {
-    it('should create a new tweet', async () => {
+    it('should create a new tweet and store serialized tweet in Redis', async () => {
       const createTweetDto: CreateTweetDto = {
         content: 'Hello, world!',
         authorId: 1,
@@ -74,10 +85,22 @@ describe('TweetsService', () => {
         category: TweetCategory.Tech,
       };
 
-      const author = { id: '1', name: 'Test User' } as unknown as User;
-      const existingHashtags = [{ id: '1', name: 'nestjs' }] as Hashtag[];
+      const author = {
+        id: '1',
+        firstName: 'Test User firstName',
+        lastName: 'Test User lastName',
+      } as unknown as User;
       const newHashtag = { id: '2', name: 'typescript' } as Hashtag;
-      const createdTweet = { id: '1', ...createTweetDto } as unknown as Tweet;
+      const existingHashtags = [
+        { id: '1', name: 'nestjs' } as Hashtag,
+      ] as Hashtag[];
+
+      const createdTweet = {
+        id: '1',
+        ...createTweetDto,
+        hashtags: existingHashtags,
+        author: author,
+      } as unknown as Tweet;
 
       jest.spyOn(userRepository, 'findOne').mockResolvedValueOnce(author);
       jest
@@ -85,8 +108,10 @@ describe('TweetsService', () => {
         .mockResolvedValueOnce(existingHashtags);
       jest.spyOn(hashtagRepository, 'create').mockReturnValueOnce(newHashtag);
       jest.spyOn(hashtagRepository, 'save').mockResolvedValueOnce(newHashtag);
+
       jest.spyOn(tweetRepository, 'create').mockReturnValueOnce(createdTweet);
       jest.spyOn(tweetRepository, 'save').mockResolvedValueOnce(createdTweet);
+      jest.spyOn(cacheService, 'setValue').mockResolvedValueOnce();
 
       const result = await service.create(createTweetDto);
 
@@ -97,8 +122,16 @@ describe('TweetsService', () => {
       expect(hashtagRepository.findBy).toHaveBeenCalledWith({
         name: In(createTweetDto.hashtags),
       });
-      expect(hashtagRepository.save).toHaveBeenCalledWith(newHashtag);
+      expect(hashtagRepository.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: newHashtag.name,
+        }),
+      );
       expect(tweetRepository.save).toHaveBeenCalledWith(expect.any(Tweet));
+      expect(cacheService.setValue).toHaveBeenCalledWith(
+        `cache:tweet:${createdTweet.id}`,
+        expect.any(String),
+      );
     });
 
     it('should throw an error if the author does not exist', async () => {

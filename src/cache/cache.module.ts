@@ -16,4 +16,4 @@ import Redis from 'ioredis';
   ],
   exports: ['REDIS'],
 })
-export class RedisModule {}
+export class CacheModule {}
