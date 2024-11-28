@@ -58,6 +58,12 @@ export class GroupsService {
     return this.groupRepository.save(group);
   }
 
+  async findGroupsByIds(groupIds: number[]): Promise<Group[]> {
+    return await this.groupRepository.find({
+      where: { id: In(groupIds) },
+    });
+  }
+
   async findUserGroupsByUserIds(
     userIds: number[],
     authorId: number,

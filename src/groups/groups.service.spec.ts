@@ -2,7 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Group } from './group.entity';
 import { GroupsService } from './groups.service';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { User } from '../users/user.entity';
 
 // Mock data for users and groups
@@ -88,6 +88,10 @@ describe('GroupsService', () => {
     service = module.get<GroupsService>(GroupsService);
     groupRepository = module.get<Repository<Group>>(getRepositoryToken(Group));
     // userRepository = module.get<Repository<User>>(getRepositoryToken(User));
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
   });
 
   it('should be defined', () => {
@@ -221,6 +225,56 @@ describe('GroupsService', () => {
         { userIds },
       );
       expect(createQueryBuilderMock.getMany).toHaveBeenCalled();
+    });
+  });
+
+  describe('findGroupsByIds', () => {
+    it('should return an array of groups when valid IDs are passed', async () => {
+      // Arrange
+      const groupIds = [1, 2, 3];
+      const mockGroups = [
+        { id: 1, name: 'Group 1' } as Group,
+        { id: 2, name: 'Group 2' } as Group,
+        { id: 3, name: 'Group 3' } as Group,
+      ];
+      mockGroupRepository.find.mockResolvedValue(mockGroups);
+
+      // Act
+      const result = await service.findGroupsByIds(groupIds);
+
+      // Assert
+      expect(result).toEqual(mockGroups);
+      expect(mockGroupRepository.find).toHaveBeenCalledWith({
+        where: { id: In(groupIds) },
+      });
+    });
+
+    it('should return an empty array if no groups are found for the given IDs', async () => {
+      // Arrange
+      const groupIds = [10, 11, 12];
+      mockGroupRepository.find.mockResolvedValue([]);
+
+      // Act
+      const result = await service.findGroupsByIds(groupIds);
+
+      // Assert
+      expect(result).toEqual([]);
+      expect(mockGroupRepository.find).toHaveBeenCalledWith({
+        where: { id: In(groupIds) },
+      });
+    });
+
+    it('should throw an error if the repository throws an error', async () => {
+      // Arrange
+      const groupIds = [1, 2, 3];
+      mockGroupRepository.find.mockRejectedValue(
+        new Error('Something went wrong'),
+      );
+
+      // Act & Assert
+      await expect(service.findGroupsByIds(groupIds)).rejects.toThrow(
+        'Something went wrong',
+      );
     });
   });
 
