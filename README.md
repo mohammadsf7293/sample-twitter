@@ -14,14 +14,14 @@ We want the author of the tweet to be able to set a series of permissions for th
 # Scalability of Project Architecture (System Design)
 
 <p align="center">
- <img src="https://ipfs.io/ipfs/Qmee9c6QApMcrHuivmBWWYVxK3CKveLSTENLQvtutjTDie" width="25vw" alt="Better Mode architecture" />
+ <img src="https://ipfs.io/ipfs/Qmee9c6QApMcrHuivmBWWYVxK3CKveLSTENLQvtutjTDie" style="width:25vw;" alt="Better Mode architecture" />
 </p>
 
 As you see from the diagram above, a cache mediator is used which is Redis.
 Redis is used in order to dramatically decrease the traffic directing MySQL servers.
 If something is not found in the cache, then it will be searched through MySQL Database
-# Cache strcuture
 
+# Cache strcuture
 
 ## Project setup
 
