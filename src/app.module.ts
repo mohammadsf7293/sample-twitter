@@ -6,6 +6,7 @@ import { GraphQLModule } from '@nestjs/graphql';
 import { upperDirectiveTransformer } from './common/directives/upper-case.directive';
 import { GroupsModule } from './groups/groups.module';
 import { TweetsModule } from './tweets/tweets.module';
+import { CacheModule } from './cache/cache.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { TweetsModule } from './tweets/tweets.module';
     UsersModule,
     GroupsModule,
     TweetsModule,
+    CacheModule,
     GraphQLModule.forRoot<ApolloDriverConfig>({
       driver: ApolloDriver,
       typePaths: ['./**/*.graphql'],

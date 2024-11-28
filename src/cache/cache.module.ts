@@ -1,5 +1,6 @@
 import { Module, Global } from '@nestjs/common';
 import Redis from 'ioredis';
+import { CacheService } from './cache.service';
 
 @Global()
 @Module({
@@ -13,7 +14,8 @@ import Redis from 'ioredis';
         });
       },
     },
+    CacheService,
   ],
-  exports: ['REDIS'],
+  exports: ['REDIS', CacheService],
 })
 export class CacheModule {}

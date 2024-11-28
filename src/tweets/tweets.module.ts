@@ -8,11 +8,13 @@ import { Tweet } from './tweet.entity';
 import { TweetsService } from './tweets.service';
 import { TweetsResolver } from './tweets.resolver';
 import { UsersModule } from 'src/users/users.module';
+import { CacheModule } from 'src/cache/cache.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Group, User, Hashtag, Tweet]),
     UsersModule,
+    CacheModule,
   ],
   //TODO: update providers and exports
   providers: [TweetsService, TweetsResolver, DateScalar],
