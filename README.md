@@ -107,6 +107,7 @@ Instead of querying MySQL for every user feed request:
   Similar to public tweets, private tweets for groups are stored in **Redis ZSETs**.  
   - Large datasets are chunked into separate keys based on time.  
 
+The same structure can be applied to cache the `edit permissions` of the tweet.
 ---
 
 ## Final Feed Construction
@@ -124,7 +125,8 @@ To further enhance the system's scalability and performance, the following impro
 - **Enhanced Chunking Strategies**: Develop more advanced chunking methods for Redis keys to ensure efficient data retrieval and management.  
 - **Optimized Feed Filtering**: Refine feed filtering mechanisms to cater to advanced user preferences, such as custom hashtags, categories, or other criteria.  
 - **Redis Clustering**: Transition to Redis clustered deployments with replicas for each master node, ensuring higher availability and fault tolerance.  
-- **MySQL Partitioning**: Partition MySQL tables based on time, with a robust policy for removing old partitions after creating backups. This keeps database performance optimal and reduces the need for scaling resources.  
+- **MySQL Partitioning**: Partition MySQL tables based on time, with a robust policy for removing old partitions after creating backups. This keeps database performance optimal and reduces the need for scaling resources.
+- **MySQL Query Indexing**: Defining indexes which are aligned with defined and used queries in code
 - **Sharded and Replicated MySQL**: Scale MySQL by implementing sharding and replication. Tools like [Vitess](https://vitess.io) can be used to manage large-scale MySQL deployments effectively.
 
 ### Setup Instructions
