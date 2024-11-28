@@ -9,6 +9,8 @@ import { UpdateTweetDto } from './dto/update-tweet.dto';
 import { CacheService } from '../cache/cache.service';
 import * as protobuf from 'protobufjs';
 import * as path from 'path';
+import { Group } from '../groups/group.entity';
+import { GroupsService } from '../groups/groups.service';
 
 @Injectable()
 export class TweetsService {
@@ -22,7 +24,9 @@ export class TweetsService {
     @InjectRepository(Hashtag)
     private readonly hashtagRepository: Repository<Hashtag>,
 
-    private readonly CacheService: CacheService, // Inject CacheService
+    private readonly groupsService: GroupsService,
+
+    private readonly CacheService: CacheService,
   ) {}
 
   async create(createTweetDto: CreateTweetDto): Promise<Tweet> {
@@ -205,5 +209,50 @@ export class TweetsService {
       where: { author: { id: authorId } },
       relations: ['author', 'hashtags', 'parentTweet', 'childTweets'],
     });
+  }
+
+  // Helper method to assign groups to users (as per your updated logic)
+  private async assignGroupsToUsers(
+    userIds: number[],
+    groupIds: number[],
+    authorId: number,
+  ): Promise<Group[]> {
+    let groupsToAssign: Group[] = [];
+
+    // Find groups by the user IDs using the groups service
+    const userGroups = await this.groupsService.findUserGroupsByUserIds(
+      userIds,
+      authorId,
+    );
+
+    // Filter groups to make sure that they only contain the given userIds
+    const validUserGroups = userGroups.filter((group) => {
+      // Check that the group contains exactly the same set of users as userIds (no extra users)
+      return (
+        group.users.every((user) => userIds.includes(user.id)) &&
+        userIds.every((userId) =>
+          group.users.map((user) => user.id).includes(userId),
+        )
+      );
+    });
+
+    // If no valid user groups are found, create a new group with userIds
+    if (validUserGroups.length === 0) {
+      const newGroup = await this.groupsService.create({
+        name: 'groupOfUsers',
+        userIds: userIds,
+        creatorId: authorId,
+        parentGroupId: null,
+      });
+      validUserGroups.push(newGroup);
+    }
+
+    // Find groups by the provided group IDs (explicitly given by the author)
+    const existingGroups = await this.groupsService.findGroupsByIds(groupIds);
+
+    // Combine the user groups and the explicitly provided groups and ensure there are no duplicates
+    groupsToAssign = [...new Set([...validUserGroups, ...existingGroups])];
+
+    return groupsToAssign;
   }
 }

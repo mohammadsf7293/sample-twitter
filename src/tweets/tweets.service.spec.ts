@@ -8,6 +8,7 @@ import { Hashtag } from './hashtag.entity';
 import { CreateTweetDto } from './dto/create-tweet.dto';
 import { UpdateTweetDto } from './dto/update-tweet.dto';
 import { CacheService } from '../cache/cache.service';
+import { GroupsService } from '../groups/groups.service';
 
 const mockTweetRepository = {
   create: jest.fn(),
@@ -31,6 +32,12 @@ const mockHashtagRepository = {
 
 const mockCacheService = {
   setValue: jest.fn(),
+};
+
+const mockGroupsService = {
+  findUserGroupsByUserIds: jest.fn(),
+  findGroupsByIds: jest.fn(),
+  create: jest.fn(),
 };
 
 describe('TweetsService', () => {
@@ -59,6 +66,10 @@ describe('TweetsService', () => {
         {
           provide: CacheService,
           useValue: mockCacheService,
+        },
+        {
+          provide: GroupsService,
+          useValue: mockGroupsService,
         },
       ],
     }).compile();
@@ -244,7 +255,7 @@ describe('TweetsService', () => {
     //     `cache:tweet:${result.id}`,
     //     expect.any(String),
     //   );
-    // });    
+    // });
 
     it('should throw an error if the tweet does not exist', async () => {
       const updateTweetDto: UpdateTweetDto = { content: 'Updated content' };
@@ -254,6 +265,172 @@ describe('TweetsService', () => {
       await expect(service.update('999', updateTweetDto)).rejects.toThrow(
         'Tweet not found',
       );
+    });
+  });
+
+  describe('assignGroupsToUsers', () => {
+    it('should return valid user groups that match the given userIds', async () => {
+      const userIds = [1, 2];
+      const groupIds = [];
+      const authorId = 10;
+
+      const matchingGroup = {
+        id: 1,
+        users: [{ id: 1 }, { id: 2 }],
+      };
+      mockGroupsService.findUserGroupsByUserIds.mockResolvedValueOnce([
+        matchingGroup,
+      ]);
+      mockGroupsService.findGroupsByIds.mockResolvedValueOnce([]);
+
+      const result = await service['assignGroupsToUsers'](
+        userIds,
+        groupIds,
+        authorId,
+      );
+
+      expect(result).toEqual([matchingGroup]);
+      expect(mockGroupsService.findUserGroupsByUserIds).toHaveBeenCalledWith(
+        userIds,
+        authorId,
+      );
+      expect(mockGroupsService.findGroupsByIds).toHaveBeenCalledWith(groupIds);
+    });
+
+    it('should create a new group if no valid user groups exist', async () => {
+      const userIds = [1, 2];
+      const groupIds = [];
+      const authorId = 10;
+
+      const newGroup = {
+        id: 2,
+        users: [{ id: 1 }, { id: 2 }],
+      };
+
+      mockGroupsService.findUserGroupsByUserIds.mockResolvedValueOnce([]);
+      mockGroupsService.findGroupsByIds.mockResolvedValueOnce([]);
+      mockGroupsService.create.mockResolvedValueOnce(newGroup);
+
+      const result = await service['assignGroupsToUsers'](
+        userIds,
+        groupIds,
+        authorId,
+      );
+
+      expect(result).toEqual([newGroup]);
+      expect(mockGroupsService.create).toHaveBeenCalledWith({
+        name: 'groupOfUsers',
+        userIds,
+        creatorId: authorId,
+        parentGroupId: null,
+      });
+    });
+
+    it('should combine valid user groups and explicitly provided groups, avoiding duplicates', async () => {
+      const userIds = [1, 2];
+      const groupIds = [3];
+      const authorId = 10;
+
+      const matchingGroup = {
+        id: 1,
+        users: [{ id: 1 }, { id: 2 }],
+      };
+      const explicitGroup = {
+        id: 3,
+        users: [{ id: 3 }],
+      };
+
+      mockGroupsService.findUserGroupsByUserIds.mockResolvedValueOnce([
+        matchingGroup,
+      ]);
+      mockGroupsService.findGroupsByIds.mockResolvedValueOnce([explicitGroup]);
+
+      const result = await service['assignGroupsToUsers'](
+        userIds,
+        groupIds,
+        authorId,
+      );
+
+      expect(result).toEqual([matchingGroup, explicitGroup]);
+      expect(mockGroupsService.findUserGroupsByUserIds).toHaveBeenCalledWith(
+        userIds,
+        authorId,
+      );
+      expect(mockGroupsService.findGroupsByIds).toHaveBeenCalledWith(groupIds);
+    });
+
+    it('should create a new group if existing groups do not match the userIds', async () => {
+      const userIds = [1, 2];
+      const groupIds = [];
+      const authorId = 10;
+
+      const nonMatchingGroup = {
+        id: 1,
+        users: [{ id: 1 }, { id: 3 }],
+      };
+      const newGroup = {
+        id: 2,
+        users: [{ id: 1 }, { id: 2 }],
+      };
+
+      mockGroupsService.findUserGroupsByUserIds.mockResolvedValueOnce([
+        nonMatchingGroup,
+      ]);
+      mockGroupsService.findGroupsByIds.mockResolvedValueOnce([]);
+      mockGroupsService.create.mockResolvedValueOnce(newGroup);
+
+      const result = await service['assignGroupsToUsers'](
+        userIds,
+        groupIds,
+        authorId,
+      );
+
+      expect(result).toEqual([newGroup]);
+      expect(mockGroupsService.create).toHaveBeenCalledWith({
+        name: 'groupOfUsers',
+        userIds,
+        creatorId: authorId,
+        parentGroupId: null,
+      });
+    });
+
+    it('should create a new group if an existing group has additional users beyond the given userIds', async () => {
+      const userIds = [1, 2];
+      const groupIds = [];
+      const authorId = 10;
+
+      const groupWithExtraUser = {
+        id: 1,
+        users: [{ id: 1 }, { id: 2 }, { id: 3 }], // Extra user with id 3
+      };
+      const newGroup = {
+        id: 2,
+        users: [{ id: 1 }, { id: 2 }],
+      };
+
+      mockGroupsService.findUserGroupsByUserIds.mockResolvedValueOnce([
+        groupWithExtraUser,
+      ]);
+      mockGroupsService.findGroupsByIds.mockResolvedValueOnce([]);
+      mockGroupsService.create.mockResolvedValueOnce(newGroup);
+
+      const result = await service['assignGroupsToUsers'](
+        userIds,
+        groupIds,
+        authorId,
+      );
+
+      expect(result).toEqual([newGroup]);
+      expect(mockGroupsService.findUserGroupsByUserIds).toHaveBeenCalledWith(
+        userIds,
+        authorId,
+      );
+      expect(mockGroupsService.create).toHaveBeenCalledWith({
+        name: 'groupOfUsers',
+        userIds,
+        creatorId: authorId,
+        parentGroupId: null,
+      });
     });
   });
 
