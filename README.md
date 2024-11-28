@@ -1,11 +1,32 @@
 ## Description
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+This is a project which is about creating a simple twitter (X) server application.
+The project has mostly focused on implementing a permission system like that of twitter.
+The permission system is like this:
+We want the author of the tweet to be able to set a series of permissions for their tweet. By default, a tweet inherits parent tweet permission, if the tweet has no parent, then it is accessible to everyone and only the author can edit the tweet. Here is the list of permissions:
+
+- **View**: Author can add users or groups to the “View” permission list, if someone is in this list or is part of a group that is in this list, can see the tweet. Others can’t.
+  - If the tweet is a reply to another tweet, the author can decide to enable “auto-inheritance” which makes sure the view permissions of this tweet are identical to the parent tweet. Any changes on the parent tweet’s view permissions will be reflected in this tweet as well.
+- **Edit**: Author can add users or groups to the “Edit” permission list, if someone is in this list or is part of a group that is in this list, can edit the tweet. Others can’t.
+  - If the tweet is a reply to another tweet, the author can decide to enable “auto-inheritance” which makes sure the edit permissions of this tweet is identical to the parent tweet. Any changes to the parent tweet’s edit permissions will be reflected in this tweet as well.
+-
+
+# Scalability of Project Architecture (System Design)
+
+<p align="center">
+ <img src="https://ipfs.io/ipfs/Qmee9c6QApMcrHuivmBWWYVxK3CKveLSTENLQvtutjTDie" width="120" alt="Better Mode architecture" />
+</p>
+
+As you see from the diagram above, a cache mediator is used which is Redis.
+Redis is used in order to dramatically decrease the traffic directing MySQL servers.
+If something is not found in the cache, then it will be searched through MySQL Database
+# Cache strcuture
+
 
 ## Project setup
 
 ```bash
-$ yarn install
+yarn install
 ```
 
 ## Compile and run the project
@@ -41,8 +62,8 @@ When you're ready to deploy your NestJS application to production, there are som
 If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
 
 ```bash
-$ yarn install -g mau
-$ mau deploy
+yarn install -g mau
+mau deploy
 ```
 
 With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
