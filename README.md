@@ -31,6 +31,15 @@ This project is a simplified server application inspired by Twitter (X), focusin
 The system leverages **Redis** as a cache mediator to minimize traffic to MySQL servers. If a requested item is not found in the cache, it is fetched from MySQL and subsequently cached.
 
 ---
+## Considerations
+
+In this design, **groups** are the primary mechanism for defining the visibility and editability of tweets. If a user wants to set specific view or edit permissions by assigning a combination of `UserIDs` and `GroupIDs`, the system creates a new group that includes those `UserIDs` and `GroupIDs`. 
+
+The newly created group's ID is then assigned to the tweet's permissions. This approach simplifies the overall design, making it more generalized and easier to manage.
+
+### Future Enhancements
+
+In the future, the list of user-created groups can be displayed in the UI to avoid repeatedly creating groups with the same users or items. Additionally, server-side logic can be implemented to detect and prevent the creation of duplicate groups. If a user attempts to create a group with identical members to an existing one, the system could
 
 ## Cache Design
 
