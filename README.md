@@ -128,6 +128,8 @@ To further enhance the system's scalability and performance, the following impro
 - **MySQL Partitioning**: Partition MySQL tables based on time, with a robust policy for removing old partitions after creating backups. This keeps database performance optimal and reduces the need for scaling resources.
 - **MySQL Query Indexing**: Defining indexes which are aligned with defined and used queries in code
 - **Sharded and Replicated MySQL**: Scale MySQL by implementing sharding and replication. Tools like [Vitess](https://vitess.io) can be used to manage large-scale MySQL deployments effectively.
+- **Use UUID in every where**: In certain entities, such as `User` and `Group`, I have used integer IDs for simplicity. However, in a production environment, using **Universally Unique Identifiers (UUIDs)** is a better practice for ensuring greater uniqueness and scalability.
+- - **Decoupling Modules**: As seen here, due to the use of **Nest ORM** (TypeORM), even though we have separate modules such as `User`, `Group`, and `Tweet`, the relational nature of the data leads to some degree of coupling between these modules. This is because relationships must be defined within the ORM entities. This coupling can become problematic, especially in scenarios where you might want to use a different database (e.g., MongoDB) for the `User` module. Such tight coupling can make future changes more cumbersome and harder to manage.
 
 ### Setup Instructions
 
