@@ -32,6 +32,9 @@ The system leverages **Redis** as a cache mediator to minimize traffic to MySQL 
 
 ---
 ## Considerations
+The project is not fully developed yet and is being actively updated. However, this README outlines all the key ideas and considerations regarding system design, scalability, and more. 
+
+The methods described here have been previously implemented in the **Quiz of Kings** game for its news feed. With over 30 million users, this approach successfully ensured low latency for loading feeds, even under high traffic conditions.
 
 In this design, **groups** are the primary mechanism for defining the visibility and editability of tweets. If a user wants to set specific view or edit permissions by assigning a combination of `UserIDs` and `GroupIDs`, the system creates a new group that includes those `UserIDs` and `GroupIDs`. 
 
@@ -114,14 +117,26 @@ Instead of querying MySQL for every user feed request:
 
 ---
 
-## Future Improvements
+### Future Improvements
 
-- Implement enhanced chunking strategies for Redis keys.  
-- Optimize feed filtering mechanisms based on advanced user preferences.  
-- Scale the cache system to support larger datasets and concurrent users.  
+To further enhance the system's scalability and performance, the following improvements can be implemented:
 
-## Project setup
+- **Enhanced Chunking Strategies**: Develop more advanced chunking methods for Redis keys to ensure efficient data retrieval and management.  
+- **Optimized Feed Filtering**: Refine feed filtering mechanisms to cater to advanced user preferences, such as custom hashtags, categories, or other criteria.  
+- **Redis Clustering**: Transition to Redis clustered deployments with replicas for each master node, ensuring higher availability and fault tolerance.  
+- **MySQL Partitioning**: Partition MySQL tables based on time, with a robust policy for removing old partitions after creating backups. This keeps database performance optimal and reduces the need for scaling resources.  
+- **Sharded and Replicated MySQL**: Scale MySQL by implementing sharding and replication. Tools like [Vitess](https://vitess.io) can be used to manage large-scale MySQL deployments effectively.
 
+### Setup Instructions
+
+Before running the project, ensure that both **MySQL** and **Redis** are up and running as defined in the `docker-compose.yml` file. 
+
+You can start them by running the following command:
+
+```bash
+docker-compose up -d
+```
+Then you should install project dependencies via `yarn` using the following command:
 ```bash
 yarn install
 ```
@@ -137,6 +152,14 @@ $ yarn run start:dev
 
 # production mode
 $ yarn run start:prod
+```
+
+## Updating the GraphQL Main Schema
+
+If you make any changes to the `*.graphql` files in any module, you will need to update the main (merged) auto-generated GraphQL schema. To do this, run the following command:
+
+```bash
+yarn generate:typings
 ```
 
 ## Run tests
@@ -177,17 +200,3 @@ Check out a few resources that may come in handy when working with NestJS:
 - Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
 - To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
 - Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
-
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).

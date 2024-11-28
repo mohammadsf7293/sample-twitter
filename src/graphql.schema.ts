@@ -55,7 +55,7 @@ export abstract class IQuery {
 export abstract class IMutation {
     abstract createGroup(createGroupInput?: Nullable<CreateGroupInput>): Nullable<Group> | Promise<Nullable<Group>>;
 
-    abstract createTweet(input: CreateTweetInput): Tweet | Promise<Tweet>;
+    abstract createTweet(createTweetInput: CreateTweetInput): Tweet | Promise<Tweet>;
 
     abstract updateTweet(id: string, input: UpdateTweetInput): Tweet | Promise<Tweet>;
 
