@@ -14,7 +14,7 @@ We want the author of the tweet to be able to set a series of permissions for th
 # Scalability of Project Architecture (System Design)
 
 <p align="center">
- <img src="https://ipfs.io/ipfs/Qmee9c6QApMcrHuivmBWWYVxK3CKveLSTENLQvtutjTDie" width="120" alt="Better Mode architecture" />
+ <img src="https://ipfs.io/ipfs/Qmee9c6QApMcrHuivmBWWYVxK3CKveLSTENLQvtutjTDie" width="25vw" alt="Better Mode architecture" />
 </p>
 
 As you see from the diagram above, a cache mediator is used which is Redis.
