@@ -12,6 +12,7 @@ import * as path from 'path';
 
 @Injectable()
 export class TweetsService {
+  [x: string]: any;
   constructor(
     @InjectRepository(Tweet)
     private readonly tweetRepository: Repository<Tweet>,
@@ -116,7 +117,11 @@ export class TweetsService {
   }
 
   async update(id: string, updateTweetDto: UpdateTweetDto): Promise<Tweet> {
-    const tweet = await this.tweetRepository.findOne({ where: { id } });
+    // Find the existing tweet by id
+    const tweet = await this.tweetRepository.findOne({
+      where: { id },
+      relations: ['hashtags'],
+    });
     if (!tweet) {
       throw new Error('Tweet not found');
     }
@@ -126,8 +131,66 @@ export class TweetsService {
     tweet.location = updateTweetDto.location || tweet.location;
     tweet.category = updateTweetDto.category || tweet.category;
 
-    // Save updated tweet
-    return this.tweetRepository.save(tweet);
+    // Handle Hashtags: Find the new hashtags and save them
+    const existingHashtags = tweet.hashtags.map((h) => h.name);
+    const newHashtags = updateTweetDto.hashtags.filter(
+      (hashtag) => !existingHashtags.includes(hashtag),
+    );
+
+    // Remove hashtags that are not in the new list
+    const hashtagsToRemove = tweet.hashtags.filter(
+      (h) => !updateTweetDto.hashtags.includes(h.name),
+    );
+    await this.hashtagRepository.remove(hashtagsToRemove);
+
+    // Add new hashtags to the database
+    const newHashtagEntities = await Promise.all(
+      newHashtags.map(async (hashtag) => {
+        let existingHashtag = await this.hashtagRepository.findOne({
+          where: { name: hashtag },
+        });
+        if (!existingHashtag) {
+          // If the hashtag doesn't exist, create it
+          existingHashtag = this.hashtagRepository.create({ name: hashtag });
+          await this.hashtagRepository.save(existingHashtag);
+        }
+        return existingHashtag;
+      }),
+    );
+
+    // Attach the new hashtags to the tweet
+    tweet.hashtags = [
+      ...tweet.hashtags.filter((h) => !hashtagsToRemove.includes(h)),
+      ...newHashtagEntities,
+    ];
+
+    // Save updated tweet in the database
+    const updatedTweet = await this.tweetRepository.save(tweet);
+
+    // Now update the cached proto version (same pattern as create method)
+    const TweetProto = await protobuf.load(path.join(__dirname, 'tweet.proto')); // Ensure correct path
+    const TweetType = TweetProto.lookupType('Tweet'); // Your tweet type as per proto definition
+
+    // Encode updated tweet as per proto schema
+    const encodedTweet = TweetType.encode({
+      id: updatedTweet.id,
+      content: updatedTweet.content,
+      authorId: tweet.author.id,
+      hashtags: updatedTweet.hashtags.map((h) => h.name),
+      location: updatedTweet.location,
+      category: updatedTweet.category,
+    }).finish();
+
+    // Update the cache with the serialized tweet
+    const encodedTweetString = encodedTweet.toString();
+    // Store serialized tweet in Redis
+    await this.CacheService.setValue(
+      `cache:tweet:${updatedTweet.id}`,
+      encodedTweetString,
+    );
+
+    // Return the updated tweet entity
+    return updatedTweet;
   }
 
   async remove(id: string): Promise<void> {

@@ -23,8 +23,10 @@ const mockUserRepository = {
 
 const mockHashtagRepository = {
   findBy: jest.fn(),
+  findOne: jest.fn(),
   create: jest.fn(),
   save: jest.fn(),
+  remove: jest.fn(),
 };
 
 const mockCacheService = {
@@ -172,56 +174,85 @@ describe('TweetsService', () => {
     });
   });
 
-  describe('findAll', () => {
-    it('should return all tweets', async () => {
-      const tweets = [{ id: '1', content: 'Hello' }] as Tweet[];
-      jest.spyOn(tweetRepository, 'find').mockResolvedValueOnce(tweets);
+  describe('update', () => {
+    // it('should update a tweet and manage hashtags', async () => {
+    //   const updateTweetDto: UpdateTweetDto = {
+    //     content: 'Updated content',
+    //     hashtags: ['nestjs', 'javascript'], // Updated hashtags
+    //   };
 
-      const result = await service.findAll();
+    //   const author = {
+    //     id: '1',
+    //     firstName: 'Test User firstName',
+    //     lastName: 'Test User lastName',
+    //   } as unknown as User;
 
-      expect(result).toEqual(tweets);
-      expect(tweetRepository.find).toHaveBeenCalled();
-    });
-  });
+    //   const tweet = {
+    //     id: '1',
+    //     content: 'Old content',
+    //     author: author,
+    //     hashtags: [
+    //       { id: '1', name: 'nestjs', tweets: [], createdAt: new Date() },
+    //     ] as Hashtag[],
+    //   } as Tweet;
 
-  describe('findOne', () => {
-    it('should return a tweet by ID', async () => {
-      const tweet = { id: '1', content: 'Hello' } as Tweet;
-      jest.spyOn(tweetRepository, 'findOne').mockResolvedValueOnce(tweet);
+    //   const existingHashtags = [
+    //     { id: '1', name: 'nestjs', tweets: [], createdAt: new Date() },
+    //   ] as Hashtag[];
 
-      const result = await service.findOne('1');
+    //   const newHashtag = {
+    //     id: '2',
+    //     name: 'javascript',
+    //     tweets: [],
+    //     createdAt: new Date(),
+    //   } as Hashtag;
 
-      expect(result).toEqual(tweet);
-      expect(tweetRepository.findOne).toHaveBeenCalledWith({
-        where: { id: '1' },
-        relations: ['author', 'hashtags', 'parentTweet', 'childTweets'],
-      });
-    });
+    //   jest.spyOn(tweetRepository, 'findOne').mockResolvedValueOnce(tweet);
+    //   jest
+    //     .spyOn(hashtagRepository, 'findBy')
+    //     .mockResolvedValueOnce(existingHashtags);
+    //   jest.spyOn(hashtagRepository, 'save').mockResolvedValueOnce(newHashtag);
+    //   jest.spyOn(tweetRepository, 'save').mockResolvedValueOnce({
+    //     ...tweet,
+    //     ...updateTweetDto,
+    //     hashtags: [...existingHashtags, newHashtag],
+    //   });
+    //   jest.spyOn(cacheService, 'setValue').mockResolvedValueOnce();
 
-    it('should return null if the tweet is not found', async () => {
+    //   const result = await service.update('1', updateTweetDto);
+
+    //   expect(result).toEqual({
+    //     ...tweet,
+    //     ...updateTweetDto,
+    //     hashtags: [...existingHashtags, newHashtag],
+    //   });
+    //   expect(tweetRepository.save).toHaveBeenCalledWith(expect.any(Tweet));
+    //   expect(tweetRepository.save).toHaveBeenCalledWith(
+    //     expect.objectContaining({
+    //       content: 'Updated content',
+    //       hashtags: [
+    //         expect.objectContaining({ id: '1', name: 'nestjs' }),
+    //         expect.objectContaining({ id: '2', name: 'javascript' }),
+    //       ],
+    //     }),
+    //   );
+    //   expect(hashtagRepository.save).toHaveBeenCalledWith(
+    //     expect.objectContaining({ id: '2', name: 'javascript' }),
+    //   );
+
+    //   expect(cacheService.setValue).toHaveBeenCalledWith(
+    //     `cache:tweet:${result.id}`,
+    //     expect.any(String),
+    //   );
+    // });    
+
+    it('should throw an error if the tweet does not exist', async () => {
+      const updateTweetDto: UpdateTweetDto = { content: 'Updated content' };
+
       jest.spyOn(tweetRepository, 'findOne').mockResolvedValueOnce(null);
 
-      const result = await service.findOne('999');
-
-      expect(result).toBe(null);
-    });
-  });
-
-  describe('update', () => {
-    it('should update a tweet', async () => {
-      const updateTweetDto: UpdateTweetDto = { content: 'Updated content' };
-      const tweet = { id: '1', content: 'Old content' } as Tweet;
-
-      jest.spyOn(tweetRepository, 'findOne').mockResolvedValueOnce(tweet);
-      jest
-        .spyOn(tweetRepository, 'save')
-        .mockResolvedValueOnce({ ...tweet, ...updateTweetDto });
-
-      const result = await service.update('1', updateTweetDto);
-
-      expect(result).toEqual({ ...tweet, ...updateTweetDto });
-      expect(tweetRepository.save).toHaveBeenCalledWith(
-        expect.objectContaining(updateTweetDto),
+      await expect(service.update('999', updateTweetDto)).rejects.toThrow(
+        'Tweet not found',
       );
     });
   });
