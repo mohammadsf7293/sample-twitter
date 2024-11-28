@@ -11,6 +11,7 @@ import {
   OneToMany,
 } from 'typeorm';
 import { User } from '../users/user.entity';
+import { Tweet } from '../tweets/tweet.entity';
 
 @Entity()
 export class Group {
@@ -35,6 +36,12 @@ export class Group {
   // A group can have multiple children
   @OneToMany(() => Group, (group) => group.parentGroup)
   childGroups: Group[];
+
+  @ManyToMany(() => Tweet, (tweet) => tweet.viewableGroups)
+  viewableTweets: Tweet[];
+
+  @ManyToMany(() => Tweet, (tweet) => tweet.EditableGroups)
+  editableTweets: Tweet[];
 
   // Many-to-One relationship with User (creator of the group)
   @ManyToOne(() => User, { nullable: false })
