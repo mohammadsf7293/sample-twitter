@@ -44,6 +44,16 @@ const oneGroup = {
   parentGroupId: null,
 };
 
+const mockGroupRepository = {
+  find: jest.fn().mockResolvedValue(groupArray),
+  findOneBy: jest.fn().mockResolvedValue(oneGroup),
+  findBy: jest.fn().mockResolvedValue(groupArray),
+  save: jest.fn().mockResolvedValue(oneGroup),
+  remove: jest.fn(),
+  delete: jest.fn(),
+  createQueryBuilder: jest.fn(),
+};
+
 describe('GroupsService', () => {
   let service: GroupsService;
   let groupRepository: Repository<Group>;
@@ -55,14 +65,7 @@ describe('GroupsService', () => {
         GroupsService,
         {
           provide: getRepositoryToken(Group),
-          useValue: {
-            find: jest.fn().mockResolvedValue(groupArray),
-            findOneBy: jest.fn().mockResolvedValue(oneGroup),
-            findBy: jest.fn().mockResolvedValue(groupArray),
-            save: jest.fn().mockResolvedValue(oneGroup),
-            remove: jest.fn(),
-            delete: jest.fn(),
-          },
+          useValue: mockGroupRepository,
         },
         {
           provide: getRepositoryToken(User),
@@ -129,6 +132,95 @@ describe('GroupsService', () => {
         expect(group.users).toEqual(mockUsers);
         expect(group.parentGroup).toBeUndefined();
       });
+    });
+  });
+
+  describe('findUserGroupsByUserIds', () => {
+    it('should return groups matching the provided user IDs and authorId', async () => {
+      const mockGroups = [
+        {
+          id: 1,
+          name: 'Group A',
+          creatorId: 42,
+          users: [{ id: 1 }, { id: 2 }],
+        },
+        {
+          id: 2,
+          name: 'Group B',
+          creatorId: 42,
+          users: [{ id: 2 }, { id: 3 }],
+        },
+        {
+          id: 3,
+          name: 'Group C',
+          creatorId: 43,
+          users: [{ id: 2 }, { id: 3 }],
+        },
+      ];
+
+      const createQueryBuilderMock = {
+        leftJoinAndSelect: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        getMany: jest.fn().mockResolvedValue(mockGroups),
+      };
+
+      mockGroupRepository.createQueryBuilder.mockReturnValue(
+        createQueryBuilderMock,
+      );
+
+      const userIds = [1, 2];
+      const authorId = 42;
+
+      const result = await service.findUserGroupsByUserIds(userIds, authorId);
+
+      expect(result).toEqual(mockGroups);
+      expect(createQueryBuilderMock.leftJoinAndSelect).toHaveBeenCalledWith(
+        'group.users',
+        'user',
+      );
+      expect(createQueryBuilderMock.where).toHaveBeenCalledWith(
+        'group.creatorId = :authorId',
+        { authorId },
+      );
+      expect(createQueryBuilderMock.andWhere).toHaveBeenCalledWith(
+        'user.id IN (:...userIds)',
+        { userIds },
+      );
+      expect(createQueryBuilderMock.getMany).toHaveBeenCalled();
+    });
+
+    it('should return an empty array if no matching groups are found', async () => {
+      const createQueryBuilderMock = {
+        leftJoinAndSelect: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        getMany: jest.fn().mockResolvedValue([]),
+      };
+
+      mockGroupRepository.createQueryBuilder.mockReturnValue(
+        createQueryBuilderMock,
+      );
+
+      const userIds = [10, 20];
+      const authorId = 99;
+
+      const result = await service.findUserGroupsByUserIds(userIds, authorId);
+
+      expect(result).toEqual([]);
+      expect(createQueryBuilderMock.leftJoinAndSelect).toHaveBeenCalledWith(
+        'group.users',
+        'user',
+      );
+      expect(createQueryBuilderMock.where).toHaveBeenCalledWith(
+        'group.creatorId = :authorId',
+        { authorId },
+      );
+      expect(createQueryBuilderMock.andWhere).toHaveBeenCalledWith(
+        'user.id IN (:...userIds)',
+        { userIds },
+      );
+      expect(createQueryBuilderMock.getMany).toHaveBeenCalled();
     });
   });
 

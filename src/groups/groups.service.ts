@@ -57,4 +57,18 @@ export class GroupsService {
 
     return this.groupRepository.save(group);
   }
+
+  async findUserGroupsByUserIds(
+    userIds: number[],
+    authorId: number,
+  ): Promise<Group[]> {
+    const groups = await this.groupRepository
+      .createQueryBuilder('group')
+      .leftJoinAndSelect('group.users', 'user')
+      .where('group.creatorId = :authorId', { authorId })
+      .andWhere('user.id IN (:...userIds)', { userIds })
+      .getMany();
+
+    return groups;
+  }
 }
