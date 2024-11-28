@@ -35,7 +35,7 @@ The system leverages **Redis** as a cache mediator to minimize traffic to MySQL 
 ## Cache Design
 
 <p align="center">
- <img src="https://ipfs.io/ipfs/Qmd1xhbQ694WtUvtB56K2HDXCE3jqeHJQQ1f42ic2Z91ax" style="width:25vw;" alt="Cache Architecture" />
+ <img src="https://ipfs.io/ipfs/Qmd1xhbQ694WtUvtB56K2HDXCE3jqeHJQQ1f42ic2Z91ax" style="width:45vw;" alt="Cache Architecture" />
 </p>
 
 ### Redis Cache
