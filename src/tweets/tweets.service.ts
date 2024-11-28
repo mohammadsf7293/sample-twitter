@@ -12,7 +12,6 @@ import * as path from 'path';
 
 @Injectable()
 export class TweetsService {
-  [x: string]: any;
   constructor(
     @InjectRepository(Tweet)
     private readonly tweetRepository: Repository<Tweet>,

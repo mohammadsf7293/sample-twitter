@@ -20,13 +20,14 @@ type Mutation {
 
   # Remove a tweet
   removeTweet(id: ID!): Boolean!
+
+  updateTweetPermissions(input: UpdateTweetPermissions!): Boolean!
 }
 
-# Tweet type definition with create and update timestamps
 type Tweet {
   id: ID!
   content: String!
-  author: User!  # User type will be imported from user module
+  author: User!
   hashtags: [Hashtag!]!
   location: String
   category: String
@@ -36,13 +37,11 @@ type Tweet {
   updateTime: Date!
 }
 
-# Hashtag type definition
 type Hashtag {
   id: ID!
   name: String!
 }
 
-# Input type for creating a tweet
 input CreateTweetInput {
   content: String!
   authorId: ID!
@@ -52,9 +51,15 @@ input CreateTweetInput {
   parentTweetId: ID
 }
 
-# Input type for updating a tweet
 input UpdateTweetInput {
   content: String
   location: String
   category: String
+}
+
+input UpdateTweetPermissions {
+  inheritViewPermissions: Boolean!
+  inheritEditPermissions: Boolean!
+  viewPermissions: [String!]!
+  editPermissions: [String!]!
 }
