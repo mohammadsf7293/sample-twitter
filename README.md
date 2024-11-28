@@ -1,27 +1,115 @@
+# Simple Twitter (X) Server Application
+
 ## Description
 
-This is a project which is about creating a simple twitter (X) server application.
-The project has mostly focused on implementing a permission system like that of twitter.
-The permission system is like this:
-We want the author of the tweet to be able to set a series of permissions for their tweet. By default, a tweet inherits parent tweet permission, if the tweet has no parent, then it is accessible to everyone and only the author can edit the tweet. Here is the list of permissions:
+This project is a simplified server application inspired by Twitter (X), focusing on implementing a **permission system** for tweets. It aims to replicate the permission functionalities of Twitter, where the author can control who can view or edit their tweets.  
 
-- **View**: Author can add users or groups to the “View” permission list, if someone is in this list or is part of a group that is in this list, can see the tweet. Others can’t.
-  - If the tweet is a reply to another tweet, the author can decide to enable “auto-inheritance” which makes sure the view permissions of this tweet are identical to the parent tweet. Any changes on the parent tweet’s view permissions will be reflected in this tweet as well.
-- **Edit**: Author can add users or groups to the “Edit” permission list, if someone is in this list or is part of a group that is in this list, can edit the tweet. Others can’t.
-  - If the tweet is a reply to another tweet, the author can decide to enable “auto-inheritance” which makes sure the edit permissions of this tweet is identical to the parent tweet. Any changes to the parent tweet’s edit permissions will be reflected in this tweet as well.
--
+### Permission System Overview
+- **Default Behavior**:  
+  - A tweet inherits the parent tweet's permissions.  
+  - If a tweet has no parent, it is accessible to everyone, and only the author can edit it.
 
-# Scalability of Project Architecture (System Design)
+- **Permissions**:
+  - **View**:  
+    - The author can add users or groups to the "View" permission list.  
+    - Only listed users or group members can see the tweet. Others cannot.  
+    - *Auto-Inheritance*: If enabled for a reply tweet, it will inherit the parent tweet's view permissions. Changes to the parent's permissions will reflect on this tweet.  
+  - **Edit**:  
+    - The author can add users or groups to the "Edit" permission list.  
+    - Only listed users or group members can edit the tweet. Others cannot.  
+    - *Auto-Inheritance*: Similar to "View" permissions, edit permissions can also inherit from the parent tweet.
 
+---
+
+## System Architecture
+
+### High-Level Overview
 <p align="center">
- <img src="https://ipfs.io/ipfs/Qmee9c6QApMcrHuivmBWWYVxK3CKveLSTENLQvtutjTDie" style="width:25vw;" alt="Better Mode architecture" />
+ <img src="https://ipfs.io/ipfs/Qmee9c6QApMcrHuivmBWWYVxK3CKveLSTENLQvtutjTDie" style="width:25vw;" alt="System Architecture" />
 </p>
 
-As you see from the diagram above, a cache mediator is used which is Redis.
-Redis is used in order to dramatically decrease the traffic directing MySQL servers.
-If something is not found in the cache, then it will be searched through MySQL Database
+The system leverages **Redis** as a cache mediator to minimize traffic to MySQL servers. If a requested item is not found in the cache, it is fetched from MySQL and subsequently cached.
 
-# Cache strcuture
+---
+
+## Cache Design
+
+<p align="center">
+ <img src="https://ipfs.io/ipfs/Qmd1xhbQ694WtUvtB56K2HDXCE3jqeHJQQ1f42ic2Z91ax" style="width:25vw;" alt="Cache Architecture" />
+</p>
+
+### Redis Cache
+- **Structure**:
+  - Each tweet is serialized using **protobuf** and stored in Redis with a key: `tweet:proto:$tweetID`.
+  - A **TTL (Time-To-Live)** is assigned to cached tweets to ensure only relevant data is stored.
+  - Cache updates occur during tweet creation or modification.  
+
+- **Cache Miss Handling**:  
+  If a tweet is not found in Redis, it is retrieved from MySQL and cached again.
+
+- **Cache Refresh Policy**:  
+  When a tweet is viewed, its TTL is extended to improve access speed for a period after the view.
+
+---
+
+## Feed Creation
+
+### Steps to Build a Feed
+1. **Retrieve Public Tweet IDs**:  
+   Fetch public tweets the user can see (paginated).  
+2. **Retrieve Private Tweet IDs**:  
+   Fetch private tweets the user is permitted to access.  
+3. **Merge and Sort**:  
+   Combine public and private tweets, sorted by timestamp.  
+4. **Apply Filters**:  
+   Filter tweets based on criteria such as hashtags or categories.  
+5. **Paginate the Feed**:  
+   Prepare the feed and deliver it to the user.
+
+### Optimized Approach
+Instead of querying MySQL for every user feed request:
+1. Use **Redis ZSETs (Sorted Sets)** for public tweets:  
+   - Example query:  
+     ```redis
+     ZRANGEBYSCORE tweets:public $min $max WITHSCORES LIMIT $offset $count
+     ```
+     - `$min` and `$max` define the time range.  
+     - `$offset` and `$count` handle pagination.  
+
+2. **Chunking Keys**:  
+   Divide public tweet data into chunks for scalability. Examples:  
+   - Monthly: `tweets:public:2024_10`  
+   - Weekly: `tweets:public:2024_10_1`  
+   - Daily: `tweets:public:2024_10_01`  
+
+---
+
+## Private Tweet Handling
+
+- **User Groups**:  
+  Redis Sets are used to cache group IDs for each user.  
+  - If the cache is empty, the group data is fetched from MySQL and stored in Redis.  
+  - For new users, a placeholder key can indicate recent database queries to avoid repeated checks.  
+
+- **Private Tweet Retrieval**:  
+  Similar to public tweets, private tweets for groups are stored in **Redis ZSETs**.  
+  - Large datasets are chunked into separate keys based on time.  
+
+---
+
+## Final Feed Construction
+
+1. Merge private and public tweet lists based on timestamps.  
+2. Fetch the serialized tweet data (protobuf) from Redis for each tweet.  
+3. Serve the final feed to the user with minimal MySQL dependency.
+
+---
+
+## Future Improvements
+
+- Implement enhanced chunking strategies for Redis keys.  
+- Optimize feed filtering mechanisms based on advanced user preferences.  
+- Scale the cache system to support larger datasets and concurrent users.  
 
 ## Project setup
 
