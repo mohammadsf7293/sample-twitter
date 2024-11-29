@@ -1,13 +1,18 @@
 import { Injectable, Inject } from '@nestjs/common';
 import * as Redis from 'ioredis';
-import { CacheKeys } from './constants/cache-keys.constants';
+import { CacheKeys, CacheKeysTTLs } from './constants/cache.constants';
 
 @Injectable()
 export class CacheService {
   constructor(@Inject('REDIS') private readonly redis: Redis.Redis) {}
 
-  async setValue(key: string, value: string): Promise<void> {
-    await this.redis.set(key, value);
+  // ttl is number of seconds which key will exist
+  async setValue(key: string, value: string, ttl?: number): Promise<void> {
+    if (ttl) {
+      await this.redis.set(key, value, 'EX', ttl);
+    } else {
+      await this.redis.set(key, value);
+    }
   }
 
   async getValue(key: string): Promise<string> {
@@ -15,13 +20,13 @@ export class CacheService {
   }
 
   /**
-   * Add a public tweet to a ZSET with its creation timestamp as the score.
+   * Add a public viewable tweet to a ZSET with its creation timestamp as the score.
    * @param tweetId - The ID of the tweet.
    * @param hashtags - An array of hashtags associated with the tweet.
    * @param category - category of the tweet.
    * @param creationTimestamp - The timestamp when the tweet was created.
    */
-  async addPublicTweetToZSet(
+  async addPublicViewableTweetToZSet(
     tweetId: string,
     hashtags: string[],
     category: string,
@@ -30,9 +35,14 @@ export class CacheService {
     const memberItem = `${tweetId}_${hashtags.join('_')}_${category}`;
     try {
       await this.redis.zadd(
-        CacheKeys.PUBLIC_TWEETS_ZSET,
+        CacheKeys.PUBLIC_VIEWABLE_TWEETS_ZSET,
         creationTimestamp,
         memberItem,
+      );
+
+      await this.redis.expire(
+        CacheKeys.PUBLIC_VIEWABLE_TWEETS_ZSET,
+        CacheKeysTTLs.PUBLIC_VIEWABLE_TWEETS_ZSET,
       );
     } catch (error) {
       // Log or handle the error as necessary
@@ -40,5 +50,16 @@ export class CacheService {
       //TODO: there must be an error management, defining logical and internal errors
       throw new Error('Could not add public tweet to ZSET');
     }
+  }
+
+  async setTweetIsPublicEditable(tweetId: string): Promise<void> {
+    const key = CacheKeys.PUBLIC_EDITABLE_TWEET_PREFIX + `${tweetId}`;
+    const ttl = CacheKeysTTLs.PUBLIC_EDITABLE_TWEET;
+    await this.setValue(key, '1', ttl);
+  }
+
+  async getTweetIsPublicEditable(tweetId: string): Promise<string> {
+    const key = CacheKeys.PUBLIC_EDITABLE_TWEET_PREFIX + `${tweetId}`;
+    return this.getValue(key);
   }
 }
