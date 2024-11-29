@@ -52,6 +52,38 @@ export class CacheService {
     }
   }
 
+  /**
+   * Add a private viewable tweet to a ZSET with its creation timestamp as the score.
+   * @param groupId - The ID of the group the tweet belongs to.
+   * @param tweetId - The ID of the tweet.
+   * @param hashtags - An array of hashtags associated with the tweet.
+   * @param category - category of the tweet.
+   * @param creationTimestamp - The timestamp when the tweet was created.
+   */
+  async addPrivateViewableTweetToZSet(
+    groupId: number,
+    tweetId: string,
+    hashtags: string[],
+    category: string,
+    creationTimestamp: number,
+  ): Promise<void> {
+    const memberItem = `${tweetId}_${hashtags.join('_')}_${category}`;
+    try {
+      const key = `${CacheKeys.PRIVATE_GROUP_VIEWABLE_TWEETS_ZSET_PREFIX}${groupId.toString()}`;
+      await this.redis.zadd(key, creationTimestamp, memberItem);
+
+      await this.redis.expire(
+        key,
+        CacheKeysTTLs.PRIVATE_GROUP_VIEWABLE_TWEETS_ZSET,
+      );
+    } catch (error) {
+      // Log or handle the error as necessary
+      console.error('Error adding tweet to ZSET:', error);
+      //TODO: there must be an error management, defining logical and internal errors
+      throw new Error('Could not add public tweet to ZSET');
+    }
+  }
+
   async setTweetIsPublicEditable(tweetId: string): Promise<void> {
     const key = CacheKeys.PUBLIC_EDITABLE_TWEET_PREFIX + `${tweetId}`;
     const ttl = CacheKeysTTLs.PUBLIC_EDITABLE_TWEET;

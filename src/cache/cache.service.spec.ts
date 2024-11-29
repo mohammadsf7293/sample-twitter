@@ -149,6 +149,105 @@ describe('CacheService', () => {
     });
   });
 
+  describe('addPrivateViewableTweetToZSet', () => {
+    it('should add a private viewable tweet to the ZSET and set TTL', async () => {
+      // Arrange
+      const groupId = 1;
+      const tweetId = 'tweet123';
+      const hashtags = ['#hashtag1', '#hashtag2'];
+      const category = 'tech';
+      const creationTimestamp = 1627681443000;
+      const expectedKey = `${CacheKeys.PRIVATE_GROUP_VIEWABLE_TWEETS_ZSET_PREFIX}${groupId.toString()}`;
+      const expectedMemberItem = `${tweetId}_${hashtags.join('_')}_${category}`;
+
+      mockRedisClient.zadd.mockResolvedValue(1);
+      mockRedisClient.expire.mockResolvedValue(1);
+
+      // Act
+      await service.addPrivateViewableTweetToZSet(
+        groupId,
+        tweetId,
+        hashtags,
+        category,
+        creationTimestamp,
+      );
+
+      // Assert
+      expect(mockRedisClient.zadd).toHaveBeenCalledWith(
+        expectedKey,
+        creationTimestamp,
+        expectedMemberItem,
+      );
+      expect(mockRedisClient.expire).toHaveBeenCalledWith(
+        expectedKey,
+        CacheKeysTTLs.PRIVATE_GROUP_VIEWABLE_TWEETS_ZSET,
+      );
+    });
+
+    it('should throw an error if adding tweet to ZSET fails', async () => {
+      // Arrange
+      const groupId = 1;
+      const tweetId = 'tweet123';
+      const hashtags = ['#hashtag1', '#hashtag2'];
+      const category = 'tech';
+      const creationTimestamp = 1627681443000;
+      const expectedKey = `${CacheKeys.PRIVATE_GROUP_VIEWABLE_TWEETS_ZSET_PREFIX}${groupId.toString()}`;
+      const expectedMemberItem = `${tweetId}_${hashtags.join('_')}_${category}`;
+
+      mockRedisClient.zadd.mockRejectedValue(new Error('Redis failure'));
+
+      // Act & Assert
+      await expect(
+        service.addPrivateViewableTweetToZSet(
+          groupId,
+          tweetId,
+          hashtags,
+          category,
+          creationTimestamp,
+        ),
+      ).rejects.toThrowError('Could not add public tweet to ZSET');
+      expect(mockRedisClient.zadd).toHaveBeenCalledWith(
+        expectedKey,
+        creationTimestamp,
+        expectedMemberItem,
+      );
+    });
+
+    it('should handle the error if Redis expires call fails', async () => {
+      // Arrange
+      const groupId = 1;
+      const tweetId = 'tweet123';
+      const hashtags = ['#hashtag1', '#hashtag2'];
+      const category = 'tech';
+      const creationTimestamp = 1627681443000;
+      const expectedKey = `${CacheKeys.PRIVATE_GROUP_VIEWABLE_TWEETS_ZSET_PREFIX}${groupId.toString()}`;
+      const expectedMemberItem = `${tweetId}_${hashtags.join('_')}_${category}`;
+
+      mockRedisClient.zadd.mockResolvedValue(1);
+      mockRedisClient.expire.mockRejectedValue(new Error('Expire failed'));
+
+      // Act & Assert
+      await expect(
+        service.addPrivateViewableTweetToZSet(
+          groupId,
+          tweetId,
+          hashtags,
+          category,
+          creationTimestamp,
+        ),
+      ).rejects.toThrowError('Could not add public tweet to ZSET');
+      expect(mockRedisClient.zadd).toHaveBeenCalledWith(
+        expectedKey,
+        creationTimestamp,
+        expectedMemberItem,
+      );
+      expect(mockRedisClient.expire).toHaveBeenCalledWith(
+        expectedKey,
+        CacheKeysTTLs.PRIVATE_GROUP_VIEWABLE_TWEETS_ZSET,
+      );
+    });
+  });
+
   describe('setTweetIsPublicEditable', () => {
     it('should set the correct key in Redis with value 1 and the correct TTL', async () => {
       // Arrange
