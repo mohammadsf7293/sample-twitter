@@ -1,4 +1,4 @@
-import { Field, InputType } from '@nestjs/graphql';
+import { Field, InputType, Int } from '@nestjs/graphql';
 
 @InputType()
 export class UpdateTweetPermissionsDto {
@@ -8,9 +8,15 @@ export class UpdateTweetPermissionsDto {
   @Field()
   inheritEditPermissions: boolean;
 
-  @Field(() => [String])
-  viewPermissions: string[];
+  @Field(() => [Int])
+  viewPermissionsUserIds: number[];
 
-  @Field(() => [String])
-  editPermissions: string[];
+  @Field(() => [Int])
+  viewPermissionsGroupIds: number[];
+
+  @Field(() => [Int])
+  editPermissionsUserIds: number[];
+
+  @Field(() => [Int])
+  editPermissionsGroupIds: number[];
 }
