@@ -241,6 +241,35 @@ export class TweetsService {
     return [depthLevel, 'public'];
   }
 
+  async determineTweetEditability(
+    tweet: Tweet,
+    editPermissionsUserIds: number[],
+    editPermissionsGroupIds: number[],
+    depthLevel: number,
+  ): Promise<[number, string] | [number, number[], number[]]> {
+    if (tweet.inheritEditPermissions) {
+      if (!tweet.parentTweet) {
+        return [depthLevel, 'public'];
+      } else {
+        return await this.determineTweetEditability(
+          tweet.parentTweet,
+          [],
+          tweet.parentTweet.editableGroups
+            ? tweet.parentTweet.editableGroups.map((group) => group.id)
+            : [],
+          depthLevel + 1,
+        );
+      }
+    } else if (
+      (editPermissionsUserIds && editPermissionsUserIds.length > 0) ||
+      (editPermissionsGroupIds && editPermissionsGroupIds.length > 0)
+    ) {
+      return [depthLevel, editPermissionsUserIds, editPermissionsGroupIds];
+    }
+
+    return [depthLevel, 'public'];
+  }
+
   // Helper method to assign groups to users (as per your updated logic)
   private async assignGroupsToUsers(
     userIds: number[],

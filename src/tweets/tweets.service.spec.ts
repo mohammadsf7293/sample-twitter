@@ -409,6 +409,147 @@ describe('TweetsService', () => {
     });
   });
 
+  describe('determineTweetEditability', () => {
+    it('should return public visibility if tweet inherits permissions and has no parent', async () => {
+      const tweet = {
+        inheritEditPermissions: true,
+        parentTweet: null,
+      } as Tweet;
+
+      const result = await service['determineTweetEditability'](
+        tweet,
+        [],
+        [],
+        0,
+      );
+      expect(result).toEqual([0, 'public']);
+    });
+
+    it('should recursively determine editability from parent tweet', async () => {
+      // If parentTweet has no parent, but because its inheritEditPermissions is true, even if it has not null editableGroups it's considered as public
+      const parentTweet = {
+        inheritEditPermissions: true,
+        parentTweet: null,
+        editableGroups: [{ id: 1 }],
+      } as Tweet;
+
+      const tweet = {
+        inheritEditPermissions: true,
+        parentTweet,
+      } as Tweet;
+
+      const result = await service['determineTweetEditability'](
+        tweet,
+        [],
+        [],
+        0,
+      );
+      expect(result).toEqual([1, 'public']);
+    });
+
+    it('should return explicit edit permissions for the tweet', async () => {
+      const tweet = {
+        inheritEditPermissions: false,
+      } as Tweet;
+
+      const result = await service['determineTweetEditability'](
+        tweet,
+        [1, 2],
+        [3, 4],
+        0,
+      );
+      expect(result).toEqual([0, [1, 2], [3, 4]]);
+    });
+
+    it('should return public editability if no permissions are set and inheritance is false', async () => {
+      const tweet = {
+        inheritEditPermissions: false,
+      } as Tweet;
+
+      const result = await service['determineTweetEditability'](
+        tweet,
+        [],
+        [],
+        0,
+      );
+      expect(result).toEqual([0, 'public']);
+    });
+
+    it('should resolve editability through a chain of parent tweets test case 1', async () => {
+      const grandParentTweet = {
+        inheritEditPermissions: true,
+        parentTweet: null,
+        editableGroups: [{ id: 1 }],
+      } as Tweet;
+
+      const parentTweet = {
+        inheritEditPermissions: true,
+        parentTweet: grandParentTweet,
+        editableGroups: [{ id: 2 }],
+      } as Tweet;
+
+      const tweet = {
+        inheritEditPermissions: true,
+        parentTweet,
+      } as Tweet;
+
+      const result = await service['determineTweetEditability'](
+        tweet,
+        [],
+        [],
+        0,
+      );
+      expect(result).toEqual([2, 'public']);
+    });
+
+    it('should resolve editability through a chain of parent tweets test case 2', async () => {
+      const grandParentTweet = {
+        inheritEditPermissions: false,
+        parentTweet: null,
+        editableGroups: [{ id: 1 }],
+      } as Tweet;
+
+      const parentTweet = {
+        inheritEditPermissions: true,
+        parentTweet: grandParentTweet,
+        editableGroups: [{ id: 2 }],
+      } as Tweet;
+
+      const tweet = {
+        inheritEditPermissions: true,
+        parentTweet,
+      } as Tweet;
+
+      const result = await service['determineTweetEditability'](
+        tweet,
+        [],
+        [],
+        0,
+      );
+      expect(result).toEqual([2, [], [1]]);
+    });
+
+    it('should increment depthLevel for each recursive call', async () => {
+      const parentTweet = {
+        inheritEditPermissions: true,
+        parentTweet: null,
+      } as Tweet;
+
+      const tweet = {
+        inheritEditPermissions: true,
+        parentTweet,
+      } as Tweet;
+
+      const result = await service['determineTweetEditability'](
+        tweet,
+        [],
+        [],
+        5,
+      );
+      expect(result).toEqual([6, 'public']);
+    });
+  });
+
   describe('assignGroupsToUsers', () => {
     it('should return valid user groups that match the given userIds', async () => {
       const userIds = [1, 2];
