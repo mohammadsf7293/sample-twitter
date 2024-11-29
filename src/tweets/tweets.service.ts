@@ -11,6 +11,7 @@ import * as protobuf from 'protobufjs';
 import * as path from 'path';
 import { Group } from '../groups/group.entity';
 import { GroupsService } from '../groups/groups.service';
+import { UpdateTweetPermissionsDto } from './dto/update-tweet-permissions.dto';
 
 @Injectable()
 export class TweetsService {
@@ -209,6 +210,35 @@ export class TweetsService {
       where: { author: { id: authorId } },
       relations: ['author', 'hashtags', 'parentTweet', 'childTweets'],
     });
+  }
+
+  async determineTweetVisibility(
+    tweet: Tweet,
+    viewPermissionsUserIds: number[],
+    viewPermissionsGroupIds: number[],
+    depthLevel: number,
+  ): Promise<[number, string] | [number, number[], number[]]> {
+    if (tweet.inheritViewPermissions) {
+      if (!tweet.parentTweet) {
+        return [depthLevel, 'public'];
+      } else {
+        return await this.determineTweetVisibility(
+          tweet.parentTweet,
+          [],
+          tweet.parentTweet.viewableGroups
+            ? tweet.parentTweet.viewableGroups.map((group) => group.id)
+            : [],
+          depthLevel + 1,
+        );
+      }
+    } else if (
+      (viewPermissionsUserIds && viewPermissionsUserIds.length > 0) ||
+      (viewPermissionsGroupIds && viewPermissionsGroupIds.length > 0)
+    ) {
+      return [depthLevel, viewPermissionsUserIds, viewPermissionsGroupIds];
+    }
+
+    return [depthLevel, 'public'];
   }
 
   // Helper method to assign groups to users (as per your updated logic)

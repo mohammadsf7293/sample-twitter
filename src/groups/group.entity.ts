@@ -40,7 +40,7 @@ export class Group {
   @ManyToMany(() => Tweet, (tweet) => tweet.viewableGroups)
   viewableTweets: Tweet[];
 
-  @ManyToMany(() => Tweet, (tweet) => tweet.EditableGroups)
+  @ManyToMany(() => Tweet, (tweet) => tweet.editableGroups)
   editableTweets: Tweet[];
 
   // Many-to-One relationship with User (creator of the group)

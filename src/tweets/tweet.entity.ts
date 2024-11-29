@@ -59,7 +59,7 @@ export class Tweet {
 
   @ManyToMany(() => Group, (group) => group.editableTweets)
   @JoinTable({ name: 'tweet_editable_groups' })
-  EditableGroups: Group[];
+  editableGroups: Group[];
 
   @ManyToMany(() => Hashtag, (hashtag) => hashtag.tweets)
   @JoinTable()

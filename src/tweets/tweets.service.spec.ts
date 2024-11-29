@@ -268,6 +268,147 @@ describe('TweetsService', () => {
     });
   });
 
+  describe('determineTweetVisibility', () => {
+    it('should return public visibility if tweet inherits permissions and has no parent', async () => {
+      const tweet = {
+        inheritViewPermissions: true,
+        parentTweet: null,
+      } as Tweet;
+
+      const result = await service['determineTweetVisibility'](
+        tweet,
+        [],
+        [],
+        0,
+      );
+      expect(result).toEqual([0, 'public']);
+    });
+
+    it('should recursively determine visibility from parent tweet', async () => {
+      // If parentTweet has no parent, but because its inheritViewPermissions is true, even if it has not null viewableGroups it's considered as public
+      const parentTweet = {
+        inheritViewPermissions: true,
+        parentTweet: null,
+        viewableGroups: [{ id: 1 }],
+      } as Tweet;
+
+      const tweet = {
+        inheritViewPermissions: true,
+        parentTweet,
+      } as Tweet;
+
+      const result = await service['determineTweetVisibility'](
+        tweet,
+        [],
+        [],
+        0,
+      );
+      expect(result).toEqual([1, 'public']);
+    });
+
+    it('should return explicit view permissions for the tweet', async () => {
+      const tweet = {
+        inheritViewPermissions: false,
+      } as Tweet;
+
+      const result = await service['determineTweetVisibility'](
+        tweet,
+        [1, 2],
+        [3, 4],
+        0,
+      );
+      expect(result).toEqual([0, [1, 2], [3, 4]]);
+    });
+
+    it('should return public visibility if no permissions are set and inheritance is false', async () => {
+      const tweet = {
+        inheritViewPermissions: false,
+      } as Tweet;
+
+      const result = await service['determineTweetVisibility'](
+        tweet,
+        [],
+        [],
+        0,
+      );
+      expect(result).toEqual([0, 'public']);
+    });
+
+    it('should resolve visibility through a chain of parent tweets test case 1', async () => {
+      const grandParentTweet = {
+        inheritViewPermissions: true,
+        parentTweet: null,
+        viewableGroups: [{ id: 1 }],
+      } as Tweet;
+
+      const parentTweet = {
+        inheritViewPermissions: true,
+        parentTweet: grandParentTweet,
+        viewableGroups: [{ id: 2 }],
+      } as Tweet;
+
+      const tweet = {
+        inheritViewPermissions: true,
+        parentTweet,
+      } as Tweet;
+
+      const result = await service['determineTweetVisibility'](
+        tweet,
+        [],
+        [],
+        0,
+      );
+      expect(result).toEqual([2, 'public']);
+    });
+
+    it('should resolve visibility through a chain of parent tweets test case 2', async () => {
+      const grandParentTweet = {
+        inheritViewPermissions: false,
+        parentTweet: null,
+        viewableGroups: [{ id: 1 }],
+      } as Tweet;
+
+      const parentTweet = {
+        inheritViewPermissions: true,
+        parentTweet: grandParentTweet,
+        viewableGroups: [{ id: 2 }],
+      } as Tweet;
+
+      const tweet = {
+        inheritViewPermissions: true,
+        parentTweet,
+      } as Tweet;
+
+      const result = await service['determineTweetVisibility'](
+        tweet,
+        [],
+        [],
+        0,
+      );
+      expect(result).toEqual([2, [], [1]]);
+    });
+
+    it('should increment depthLevel for each recursive call', async () => {
+      const parentTweet = {
+        inheritViewPermissions: true,
+        parentTweet: null,
+      } as Tweet;
+
+      const tweet = {
+        inheritViewPermissions: true,
+        parentTweet,
+      } as Tweet;
+
+      const result = await service['determineTweetVisibility'](
+        tweet,
+        [],
+        [],
+        5,
+      );
+      expect(result).toEqual([6, 'public']);
+    });
+  });
+
   describe('assignGroupsToUsers', () => {
     it('should return valid user groups that match the given userIds', async () => {
       const userIds = [1, 2];
