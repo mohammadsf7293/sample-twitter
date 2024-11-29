@@ -1,14 +1,107 @@
 syntax = "proto3";
 
-message Hashtag {
-  string name = 1;
+package tweet;
+
+// Import statements for necessary dependencies
+import "google/protobuf/timestamp.proto";
+
+enum TweetCategory {
+  SPORT = 0;
+  FINANCE = 1;
+  TECH = 2;
+  NEWS = 3;
 }
 
 message Tweet {
   string id = 1;
   string content = 2;
+
+  // Many-to-One relation to User (author of the tweet)
+  User author = 3;
+
+  // Self-referencing Many-to-One relationship (parent tweet)
+  Tweet parentTweet = 4;
+
+  // One-to-Many relationship for child tweets
+  repeated Tweet childTweets = 5;
+
+  // Permission inheritance fields
+  bool inheritViewPermissions = 6;
+  bool inheritEditPermissions = 7;
+
+  // Many-to-Many relationships for group permissions
+  repeated Group viewableGroups = 8;
+  repeated Group editableGroups = 9;
+
+  // Many-to-Many relationship with hashtags
+  repeated Hashtag hashtags = 10;
+
+  string location = 11;
+  TweetCategory category = 12;
+
+  // Timestamp fields
+  google.protobuf.Timestamp createdAt = 13;
+  google.protobuf.Timestamp updatedAt = 14;
+}
+
+// Additional definitions for related entities
+message User {
+  string id = 1;
+  string name = 2;
+}
+
+message Group {
+  string id = 1;
+  string name = 2;
+}
+
+message Hashtag {
+  string id = 1;
+  string name = 2;
+}
+
+// Service definition for Tweet operations
+service TweetService {
+  rpc CreateTweet(CreateTweetRequest) returns (Tweet);
+  rpc GetTweet(GetTweetRequest) returns (Tweet);
+  rpc UpdateTweet(UpdateTweetRequest) returns (Tweet);
+  rpc DeleteTweet(DeleteTweetRequest) returns (google.protobuf.Empty);
+  rpc ListTweets(ListTweetsRequest) returns (ListTweetsResponse);
+}
+
+message CreateTweetRequest {
+  string content = 1;
+  string authorId = 2;
+  repeated string hashtags = 3;
+  string location = 4;
+  TweetCategory category = 5;
+  string parentTweetId = 6;
+}
+
+message GetTweetRequest {
+  string id = 1;
+}
+
+message UpdateTweetRequest {
+  string id = 1;
+  string content = 2;
   string location = 3;
-  string category = 4;
-  string authorId = 5;
-  repeated Hashtag hashtags = 6;
+  TweetCategory category = 4;
+  bool inheritViewPermissions = 5;
+  bool inheritEditPermissions = 6;
+  repeated string viewableGroupIds = 7;
+  repeated string editableGroupIds = 8;
+}
+
+message DeleteTweetRequest {
+  string id = 1;
+}
+
+message ListTweetsRequest {
+  string authorId = 1;
+  TweetCategory category = 2;
+}
+
+message ListTweetsResponse {
+  repeated Tweet tweets = 1;
 }

@@ -86,7 +86,18 @@ export class TweetsService {
     const savedTweet = await this.tweetRepository.save(tweet);
 
     // Serialize the tweet to protobuf
-    const TweetProto = await protobuf.load(path.join(__dirname, 'tweet.proto'));
+    // protoPath is default for dev environment
+    let protoPath = path.join(__dirname, '../../../src/tweets/tweet.proto');
+    switch (process.env.NODE_ENV) {
+      case 'production':
+        protoPath = path.join(__dirname, 'tweets/tweet.proto');
+        break;
+      case 'test':
+        protoPath = path.join(__dirname, 'tweet.proto');
+    }
+
+    //path.join(__dirname, '../../../src/tweets/tweet.proto'),
+    const TweetProto = await protobuf.load(protoPath);
     const TweetType = TweetProto.lookupType('Tweet');
     const encodedTweet = TweetType.encode({
       id: savedTweet.id,
