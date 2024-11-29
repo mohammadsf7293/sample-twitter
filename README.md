@@ -32,13 +32,14 @@ The system leverages **Redis** as a cache mediator to minimize traffic to MySQL 
 
 ---
 ## Considerations
-The project is not fully developed yet and is being actively updated. However, this README outlines all the key ideas and considerations regarding system design, scalability, and more. 
+The project is not fully developed yet and is being actively updated. However, this README outlines all the key ideas and considerations regarding system design, scalability, and more.
 
-The methods described here have been previously implemented in the **Quiz of Kings** game for its news feed. With over 30 million users, this approach successfully ensured low latency for loading feeds, even under high traffic conditions.
+- The caching methods described here have been previously implemented in the **Quiz of Kings** game for its news feed. With over 30 million users, this approach successfully ensured low latency for loading feeds, even under high traffic conditions.
 
-In this design, **groups** are the primary mechanism for defining the visibility and editability of tweets. If a user wants to set specific view or edit permissions by assigning a combination of `UserIDs` and `GroupIDs`, the system creates a new group that includes those `UserIDs` and `GroupIDs`. 
-
+- In this design, **groups** are the primary mechanism for defining the visibility and editability of tweets. If a user wants to set specific view or edit permissions by assigning a combination of `UserIDs` and `GroupIDs`, the system creates a new group that includes those `UserIDs` and `GroupIDs`.
 The newly created group's ID is then assigned to the tweet's permissions. This approach simplifies the overall design, making it more generalized and easier to manage.
+
+- Secondly, I've considered that in the `UpdateTweetPermissions` method, If `UserIDs` and `GroupIDs` are given but also inheritance is active, those `UserIDs` and `GroupIDs` will not be set for tweet permissions and only inheritance configuration will be saved for the tweet. This is true for both edit and view permissions.
 
 ### Future Enhancements
 
@@ -130,6 +131,7 @@ To further enhance the system's scalability and performance, the following impro
 - **Sharded and Replicated MySQL**: Scale MySQL by implementing sharding and replication. Tools like [Vitess](https://vitess.io) can be used to manage large-scale MySQL deployments effectively.
 - **Use UUID in every where**: In certain entities, such as `User` and `Group`, I have used integer IDs for simplicity. However, in a production environment, using **Universally Unique Identifiers (UUIDs)** is a better practice for ensuring greater uniqueness and scalability.
 - **Decoupling Modules**: As seen here, due to the use of **Nest ORM** (TypeORM), even though we have separate modules such as `User`, `Group`, and `Tweet`, the relational nature of the data leads to some degree of coupling between these modules. This is because relationships must be defined within the ORM entities. This coupling can become problematic, especially in scenarios where you might want to use a different database (e.g., MongoDB) for the `User` module. Such tight coupling can make future changes more cumbersome and harder to manage.
+- **Implementing Error Codes**: An essential improvement is to define distinct error codes for logical errors and internal errors, ensuring better error handling and debugging. Additionally, enhancing logging capabilities for internal processes is crucial. Leveraging **NestJS Exception Filters** can streamline error management and improve the overall system robustness.
 
 ### Setup Instructions
 
