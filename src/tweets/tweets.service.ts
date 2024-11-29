@@ -270,6 +270,123 @@ export class TweetsService {
     return [depthLevel, 'public'];
   }
 
+  async updateTweetPermissions(
+    tweetId: string,
+    updatePermissionsDto: UpdateTweetPermissionsDto,
+    authorId: number,
+  ): Promise<Tweet> {
+    const {
+      viewPermissionsUserIds,
+      editPermissionsUserIds,
+      viewPermissionsGroupIds,
+      editPermissionsGroupIds,
+      inheritViewPermissions,
+      inheritEditPermissions,
+    } = updatePermissionsDto;
+
+    // Fetch the tweet
+    const tweet = await this.tweetRepository.findOne({
+      where: { id: tweetId },
+      relations: ['author', 'viewableGroups', 'editableGroups', 'parentTweet'],
+    });
+
+    if (!tweet) {
+      throw new Error('Tweet not found');
+    }
+
+    if (tweet.author.id !== authorId) {
+      throw new Error('You are not the author of this tweet');
+    }
+
+    let publicViewableTweet = false;
+    let publicEditableTweet = false;
+    let viewableGroupsToBeSet: Group[] = [];
+    let editableGroupsToBeSet: Group[] = [];
+
+    tweet.inheritViewPermissions = inheritViewPermissions;
+    const tweetViewPermissions = await this.determineTweetVisibility(
+      tweet,
+      viewPermissionsUserIds,
+      viewPermissionsGroupIds,
+      0,
+    );
+    if (tweetViewPermissions.length == 2) {
+      // public tweet
+      publicViewableTweet = true;
+    } else {
+      // private tweet
+      const [depth, allowedUserIDs, allowedGroupIDs] = tweetViewPermissions;
+      // The viewableGroups will only be set if there is no permission inheritance
+      if (depth == 0) {
+        const groupsToBeSet = await this.assignGroupsToUsers(
+          allowedUserIDs,
+          allowedGroupIDs,
+          authorId,
+        );
+        tweet.viewableGroups = groupsToBeSet;
+        viewableGroupsToBeSet = groupsToBeSet;
+      }
+    }
+
+    tweet.inheritEditPermissions = inheritEditPermissions;
+    const tweetEditPermissions = await this.determineTweetEditability(
+      tweet,
+      editPermissionsUserIds,
+      editPermissionsGroupIds,
+      0,
+    );
+    if (tweetEditPermissions.length == 2) {
+      // public editable tweet
+      publicEditableTweet = true;
+    } else {
+      // private tweet
+      const [depth, allowedUserIDs, allowedGroupIDs] = tweetEditPermissions;
+      // The editableGroups will only be set if there is no permission inheritance
+      if (depth == 0) {
+        const groupsToBeSet = await this.assignGroupsToUsers(
+          allowedUserIDs,
+          allowedGroupIDs,
+          authorId,
+        );
+        tweet.editableGroups = groupsToBeSet;
+        editableGroupsToBeSet = groupsToBeSet;
+      }
+    }
+    // Save updated tweet permissions
+    const updatedTweet = await this.tweetRepository.save(tweet);
+
+    // Updating related caches for view permissions
+    if (publicViewableTweet) {
+      this.CacheService.addPublicViewableTweetToZSet(
+        updatedTweet.id,
+        updatedTweet.hashtags.map((hashtag) => hashtag.name),
+        updatedTweet.category,
+        updatedTweet.createdAt.getTime(),
+      );
+    } else {
+      viewableGroupsToBeSet.forEach((group) => {
+        this.CacheService.addPrivateViewableTweetToZSet(
+          group.id,
+          updatedTweet.id,
+          updatedTweet.hashtags.map((hashtag) => hashtag.name),
+          updatedTweet.category,
+          updatedTweet.createdAt.getTime(),
+        );
+      });
+    }
+
+    // Updating related caches for edit permissions
+    if (publicEditableTweet) {
+      this.CacheService.setTweetIsPublicEditable(updatedTweet.id);
+    } else {
+      editableGroupsToBeSet.forEach((group) => {
+        this.CacheService.setTweetIsEditableByGroup(updatedTweet.id, group.id);
+      });
+    }
+
+    return updatedTweet;
+  }
+
   // Helper method to assign groups to users (as per your updated logic)
   private async assignGroupsToUsers(
     userIds: number[],

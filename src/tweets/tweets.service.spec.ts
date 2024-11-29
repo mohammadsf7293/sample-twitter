@@ -9,6 +9,8 @@ import { CreateTweetDto } from './dto/create-tweet.dto';
 import { UpdateTweetDto } from './dto/update-tweet.dto';
 import { CacheService } from '../cache/cache.service';
 import { GroupsService } from '../groups/groups.service';
+import { UpdateTweetPermissionsDto } from './dto/update-tweet-permissions.dto';
+import { Group } from 'src/groups/group.entity';
 
 const mockTweetRepository = {
   create: jest.fn(),
@@ -32,6 +34,13 @@ const mockHashtagRepository = {
 
 const mockCacheService = {
   setValue: jest.fn(),
+  getValue: jest.fn(),
+  addPublicViewableTweetToZSet: jest.fn(),
+  addPrivateViewableTweetToZSet: jest.fn(),
+  setTweetIsPublicEditable: jest.fn(),
+  getTweetIsPublicEditable: jest.fn(),
+  setTweetIsEditableByGroup: jest.fn(),
+  getTweetIsEditableByGroup: jest.fn(),
 };
 
 const mockGroupsService = {
@@ -81,6 +90,10 @@ describe('TweetsService', () => {
       getRepositoryToken(Hashtag),
     );
     cacheService = module.get<CacheService>(CacheService);
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
   });
 
   it('should be defined', () => {
@@ -406,6 +419,174 @@ describe('TweetsService', () => {
         5,
       );
       expect(result).toEqual([6, 'public']);
+    });
+  });
+
+  describe('updateTweetPermissions', () => {
+    it('should throw an error if the tweet is not found', async () => {
+      jest.spyOn(tweetRepository, 'findOne').mockResolvedValueOnce(null);
+
+      const dto: UpdateTweetPermissionsDto = {
+        viewPermissionsUserIds: [],
+        editPermissionsUserIds: [],
+        viewPermissionsGroupIds: [],
+        editPermissionsGroupIds: [],
+        inheritViewPermissions: false,
+        inheritEditPermissions: false,
+      };
+
+      await expect(
+        service.updateTweetPermissions('non-existent-id', dto, 1),
+      ).rejects.toThrow('Tweet not found');
+    });
+
+    it('should throw an error if the user is not the author of the tweet', async () => {
+      jest.spyOn(tweetRepository, 'findOne').mockResolvedValueOnce({
+        id: 'tweet123',
+        author: { id: 2 },
+      } as Tweet);
+
+      const dto: UpdateTweetPermissionsDto = {
+        viewPermissionsUserIds: [],
+        editPermissionsUserIds: [],
+        viewPermissionsGroupIds: [],
+        editPermissionsGroupIds: [],
+        inheritViewPermissions: false,
+        inheritEditPermissions: false,
+      };
+
+      await expect(
+        service.updateTweetPermissions('tweet123', dto, 1),
+      ).rejects.toThrow('You are not the author of this tweet');
+    });
+
+    it('should update permissions for a public viewable and editable tweet', async () => {
+      const tweet = {
+        id: 'tweet123',
+        author: { id: 1 },
+        hashtags: [{ name: 'hashtag1' }],
+        category: 'category1',
+        createdAt: new Date(1699118400000),
+        inheritViewPermissions: false,
+        inheritEditPermissions: false,
+        viewableGroups: [],
+        editableGroups: [],
+      } as unknown as Tweet;
+
+      const dto: UpdateTweetPermissionsDto = {
+        viewPermissionsUserIds: [],
+        editPermissionsUserIds: [],
+        viewPermissionsGroupIds: [],
+        editPermissionsGroupIds: [],
+        inheritViewPermissions: true,
+        inheritEditPermissions: true,
+      };
+
+      jest.spyOn(tweetRepository, 'findOne').mockResolvedValueOnce(tweet);
+      service.determineTweetVisibility = jest
+        .fn()
+        .mockResolvedValue([0, 'public']);
+      service.determineTweetEditability = jest
+        .fn()
+        .mockResolvedValue([0, 'public']);
+      jest.spyOn(tweetRepository, 'save').mockResolvedValueOnce(tweet);
+
+      jest
+        .spyOn(cacheService, 'addPublicViewableTweetToZSet')
+        .mockResolvedValueOnce();
+
+      const updatedTweet = await service.updateTweetPermissions(
+        'tweet123',
+        dto,
+        1,
+      );
+
+      expect(updatedTweet.inheritViewPermissions).toBe(true);
+      expect(updatedTweet.inheritEditPermissions).toBe(true);
+
+      // Verify CacheService for public viewable and editable tweets
+      expect(cacheService.addPublicViewableTweetToZSet).toHaveBeenCalledWith(
+        'tweet123',
+        ['hashtag1'],
+        'category1',
+        1699118400000,
+      );
+      expect(cacheService.setTweetIsPublicEditable).toHaveBeenCalledWith(
+        'tweet123',
+      );
+    });
+
+    it('should update permissions for a private viewable and editable tweet', async () => {
+      const tweet = {
+        id: 'tweet456',
+        author: { id: 1 },
+        hashtags: [{ name: 'hashtag1' }],
+        category: 'category2',
+        createdAt: new Date(1699118400000),
+        inheritViewPermissions: false,
+        inheritEditPermissions: false,
+        viewableGroups: [],
+        editableGroups: [],
+      } as unknown as Tweet;
+
+      const group1 = { id: 1 } as Group;
+      const group2 = { id: 2 } as Group;
+
+      const dto: UpdateTweetPermissionsDto = {
+        viewPermissionsUserIds: [3],
+        editPermissionsUserIds: [4],
+        viewPermissionsGroupIds: [1],
+        editPermissionsGroupIds: [2],
+        inheritViewPermissions: false,
+        inheritEditPermissions: false,
+      };
+
+      jest.spyOn(tweetRepository, 'findOne').mockResolvedValueOnce(tweet);
+      service.determineTweetVisibility = jest
+        .fn()
+        .mockResolvedValue([0, [3], [1]]);
+      service.determineTweetEditability = jest
+        .fn()
+        .mockResolvedValue([0, [4], [2]]);
+      service['assignGroupsToUsers'] = jest
+        .fn()
+        .mockResolvedValue([group1, group2]);
+      jest.spyOn(tweetRepository, 'save').mockResolvedValueOnce(tweet);
+
+      const updatedTweet = await service.updateTweetPermissions(
+        'tweet456',
+        dto,
+        1,
+      );
+
+      // Verify groups assigned
+      expect(updatedTweet.viewableGroups).toEqual([group1, group2]);
+      expect(updatedTweet.editableGroups).toEqual([group1, group2]);
+
+      // Verify CacheService for private viewable and editable tweets
+      expect(cacheService.addPrivateViewableTweetToZSet).toHaveBeenCalledWith(
+        group1.id,
+        'tweet456',
+        ['hashtag1'],
+        'category2',
+        1699118400000,
+      );
+      expect(cacheService.addPrivateViewableTweetToZSet).toHaveBeenCalledWith(
+        group2.id,
+        'tweet456',
+        ['hashtag1'],
+        'category2',
+        1699118400000,
+      );
+
+      expect(cacheService.setTweetIsEditableByGroup).toHaveBeenCalledWith(
+        'tweet456',
+        group1.id,
+      );
+      expect(cacheService.setTweetIsEditableByGroup).toHaveBeenCalledWith(
+        'tweet456',
+        group2.id,
+      );
     });
   });
 
