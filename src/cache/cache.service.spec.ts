@@ -324,4 +324,95 @@ describe('CacheService', () => {
       expect(result).toBeNull();
     });
   });
+
+  describe('SetTweetIsEditableByGroup', () => {
+    it('should set the correct key with the value and TTL', async () => {
+      const tweetId = 'tweet123';
+      const groupId = 456;
+      const expectedKey = `${CacheKeys.GROUP_EDITABLE_TWEET_PREFIX}${tweetId}:${groupId.toString()}`;
+      const ttl = CacheKeysTTLs.GROUP_EDITABLE_TWEET;
+
+      await service.setTweetIsEditableByGroup(tweetId, groupId);
+
+      expect(mockRedisClient.set).toHaveBeenCalledWith(
+        expectedKey,
+        '1',
+        'EX',
+        ttl,
+      );
+    });
+
+    it('should throw an error if setting the key fails', async () => {
+      mockRedisClient.set.mockRejectedValueOnce(new Error('Redis set error'));
+
+      const tweetId = 'tweet123';
+      const groupId = 456;
+
+      await expect(
+        service.setTweetIsEditableByGroup(tweetId, groupId),
+      ).rejects.toThrow('Redis set error');
+    });
+
+    it('should use the correct TTL value', async () => {
+      const tweetId = 'tweet123';
+      const groupId = 789;
+      const expectedKey = `${CacheKeys.GROUP_EDITABLE_TWEET_PREFIX}${tweetId}:${groupId.toString()}`;
+      const ttl = CacheKeysTTLs.GROUP_EDITABLE_TWEET;
+
+      await service.setTweetIsEditableByGroup(tweetId, groupId);
+
+      expect(mockRedisClient.set).toHaveBeenCalledWith(
+        expectedKey,
+        '1',
+        'EX',
+        ttl,
+      );
+      expect(ttl).toBeDefined();
+    });
+  });
+
+  describe('getTweetIsEditableByGroup', () => {
+    it('should retrieve the correct value for the given tweetId and groupId', async () => {
+      const tweetId = 'tweet123';
+      const groupId = 456;
+      const expectedValue = '1';
+      const key = `${CacheKeys.GROUP_EDITABLE_TWEET_PREFIX}${tweetId}:${groupId.toString()}`;
+
+      mockRedisClient.get.mockResolvedValue(expectedValue);
+
+      const result = await service.getTweetIsEditableByGroup(tweetId, groupId);
+
+      expect(mockRedisClient.get).toHaveBeenCalledWith(key);
+      expect(result).toBe(expectedValue);
+    });
+
+    it('should return null if the key does not exist', async () => {
+      const tweetId = 'tweet123';
+      const groupId = 456;
+      const key = `${CacheKeys.GROUP_EDITABLE_TWEET_PREFIX}${tweetId}:${groupId.toString()}`;
+
+      mockRedisClient.get.mockResolvedValue(null);
+
+      const result = await service.getTweetIsEditableByGroup(tweetId, groupId);
+
+      expect(mockRedisClient.get).toHaveBeenCalledWith(key);
+      expect(result).toBeNull();
+    });
+
+    it('should handle errors gracefully', async () => {
+      const tweetId = 'tweet123';
+      const groupId = 456;
+      const key = `${CacheKeys.GROUP_EDITABLE_TWEET_PREFIX}${tweetId}:${groupId.toString()}`;
+
+      mockRedisClient.get.mockRejectedValue(
+        new Error('Redis connection error'),
+      );
+
+      await expect(
+        service.getTweetIsEditableByGroup(tweetId, groupId),
+      ).rejects.toThrow('Redis connection error');
+
+      expect(mockRedisClient.get).toHaveBeenCalledWith(key);
+    });
+  });
 });

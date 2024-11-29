@@ -94,4 +94,21 @@ export class CacheService {
     const key = CacheKeys.PUBLIC_EDITABLE_TWEET_PREFIX + `${tweetId}`;
     return this.getValue(key);
   }
+
+  async setTweetIsEditableByGroup(
+    tweetId: string,
+    groupId: number,
+  ): Promise<void> {
+    const key = `${CacheKeys.GROUP_EDITABLE_TWEET_PREFIX}${tweetId}:${groupId.toString()}`;
+    const ttl = CacheKeysTTLs.GROUP_EDITABLE_TWEET;
+    await this.setValue(key, '1', ttl);
+  }
+
+  async getTweetIsEditableByGroup(
+    tweetId: string,
+    groupId: number,
+  ): Promise<string> {
+    const key = `${CacheKeys.GROUP_EDITABLE_TWEET_PREFIX}${tweetId}:${groupId.toString()}`;
+    return this.getValue(key);
+  }
 }
