@@ -4,6 +4,7 @@ import { TweetsService } from './tweets.service';
 import { TweetCategory } from './tweet.entity';
 import { CreateTweetDto } from './dto/create-tweet.dto';
 import { UpdateTweetDto } from './dto/update-tweet.dto';
+import { UpdateTweetPermissionsDto } from './dto/update-tweet-permissions.dto';
 
 const mockTweet = {
   id: '1',
@@ -22,6 +23,7 @@ const mockTweetsService = {
   create: jest.fn().mockResolvedValue(mockTweet),
   update: jest.fn().mockResolvedValue({ ...mockTweet, content: 'Updated!' }),
   remove: jest.fn().mockResolvedValue(undefined),
+  updateTweetPermissions: jest.fn(),
 };
 
 describe('TweetsResolver', () => {
@@ -103,6 +105,57 @@ describe('TweetsResolver', () => {
       const result = await resolver.removeTweet('1');
       expect(result).toEqual(true);
       expect(service.remove).toHaveBeenCalledWith('1');
+    });
+  });
+
+  describe('updateTweetPermissions', () => {
+    it('should call service to update tweet permissions', async () => {
+      const updatePermissionsDto: UpdateTweetPermissionsDto = {
+        inheritViewPermissions: true,
+        inheritEditPermissions: false,
+        viewPermissionsUserIds: [1, 2],
+        editPermissionsUserIds: [1],
+        viewPermissionsGroupIds: [],
+        editPermissionsGroupIds: [],
+      };
+
+      const result = await resolver.updateTweetPermissions(
+        '1',
+        updatePermissionsDto,
+        1,
+      );
+
+      expect(result).toBe(true);
+      expect(service.updateTweetPermissions).toHaveBeenCalledWith(
+        '1',
+        updatePermissionsDto,
+        1,
+      );
+    });
+
+    it('should throw an error if service call fails', async () => {
+      const updatePermissionsDto: UpdateTweetPermissionsDto = {
+        inheritViewPermissions: true,
+        inheritEditPermissions: false,
+        viewPermissionsUserIds: [1, 2],
+        editPermissionsUserIds: [1],
+        viewPermissionsGroupIds: [],
+        editPermissionsGroupIds: [],
+      };
+
+      jest
+        .spyOn(service, 'updateTweetPermissions')
+        .mockRejectedValueOnce(new Error('Service error'));
+
+      await expect(
+        resolver.updateTweetPermissions('1', updatePermissionsDto, 1),
+      ).rejects.toThrow('Service error');
+
+      expect(service.updateTweetPermissions).toHaveBeenCalledWith(
+        '1',
+        updatePermissionsDto,
+        1,
+      );
     });
   });
 });

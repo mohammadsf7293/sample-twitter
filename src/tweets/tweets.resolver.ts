@@ -3,6 +3,7 @@ import { TweetsService } from './tweets.service';
 import { Tweet } from './tweet.entity';
 import { CreateTweetDto } from './dto/create-tweet.dto';
 import { UpdateTweetDto } from './dto/update-tweet.dto';
+import { UpdateTweetPermissionsDto } from './dto/update-tweet-permissions.dto';
 
 @Resolver(() => Tweet)
 export class TweetsResolver {
@@ -45,6 +46,20 @@ export class TweetsResolver {
     @Args('id', { type: () => String }) id: string,
   ): Promise<boolean> {
     await this.tweetsService.remove(id);
+    return true;
+  }
+
+  @Mutation(() => Boolean)
+  async updateTweetPermissions(
+    @Args('id', { type: () => String }) id: string, // Tweet ID
+    @Args('input') updatePermissionsDto: UpdateTweetPermissionsDto, // Permissions DTO
+    @Args('authorId', { type: () => Number }) authorId: number, // Author ID
+  ): Promise<boolean> {
+    await this.tweetsService.updateTweetPermissions(
+      id,
+      updatePermissionsDto,
+      authorId,
+    );
     return true;
   }
 }

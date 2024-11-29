@@ -30,6 +30,13 @@ export class UpdateTweetInput {
     category?: Nullable<string>;
 }
 
+export class UpdateTweetPermissions {
+    inheritViewPermissions: boolean;
+    inheritEditPermissions: boolean;
+    viewPermissions: string[];
+    editPermissions: string[];
+}
+
 export class CreateUserInput {
     userName?: Nullable<string>;
     firstName?: Nullable<string>;
@@ -60,6 +67,8 @@ export abstract class IMutation {
     abstract updateTweet(id: string, input: UpdateTweetInput): Tweet | Promise<Tweet>;
 
     abstract removeTweet(id: string): boolean | Promise<boolean>;
+
+    abstract updateTweetPermissions(id: string, input: UpdateTweetPermissions): boolean | Promise<boolean>;
 
     abstract createUser(createUserInput?: Nullable<CreateUserInput>): Nullable<User> | Promise<Nullable<User>>;
 }

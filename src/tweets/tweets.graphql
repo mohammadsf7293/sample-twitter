@@ -21,7 +21,7 @@ type Mutation {
   # Remove a tweet
   removeTweet(id: ID!): Boolean!
 
-  updateTweetPermissions(input: UpdateTweetPermissions!): Boolean!
+  updateTweetPermissions(id: ID!, input: UpdateTweetPermissions!): Boolean!
 }
 
 type Tweet {
