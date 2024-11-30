@@ -54,6 +54,8 @@ export abstract class IQuery {
 
     abstract tweetsByAuthor(authorId: string): Tweet[] | Promise<Tweet[]>;
 
+    abstract canEditTweet(userId: number, tweetId: string): boolean | Promise<boolean>;
+
     abstract users(): Nullable<Nullable<User>[]> | Promise<Nullable<Nullable<User>[]>>;
 
     abstract user(id: string): Nullable<User> | Promise<Nullable<User>>;

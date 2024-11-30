@@ -24,6 +24,7 @@ const mockTweetsService = {
   update: jest.fn().mockResolvedValue({ ...mockTweet, content: 'Updated!' }),
   remove: jest.fn().mockResolvedValue(undefined),
   updateTweetPermissions: jest.fn(),
+  canEdit: jest.fn(),
 };
 
 describe('TweetsResolver', () => {
@@ -156,6 +157,22 @@ describe('TweetsResolver', () => {
         updatePermissionsDto,
         1,
       );
+    });
+  });
+
+  describe('canEditTweet', () => {
+    it('should return true if the user can edit the tweet', async () => {
+      jest.spyOn(service, 'canEdit').mockResolvedValue(true);
+      const result = await resolver.canEditTweet(1, '12345');
+      expect(result).toBe(true);
+      expect(service.canEdit).toHaveBeenCalledWith(1, '12345');
+    });
+
+    it('should return false if the user cannot edit the tweet', async () => {
+      jest.spyOn(service, 'canEdit').mockResolvedValue(false);
+      const result = await resolver.canEditTweet(1, '12345');
+      expect(result).toBe(false);
+      expect(service.canEdit).toHaveBeenCalledWith(1, '12345');
     });
   });
 });

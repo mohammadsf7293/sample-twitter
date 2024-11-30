@@ -9,6 +9,9 @@ type Query {
 
   # Fetch tweets by a specific author
   tweetsByAuthor(authorId: ID!): [Tweet!]!
+  
+  # Checking editability of a tweet by a special userId
+  canEditTweet(userId: Int!, tweetId: String!): Boolean!
 }
 
 type Mutation {

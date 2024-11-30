@@ -26,6 +26,14 @@ export class TweetsResolver {
     return this.tweetsService.findByAuthor(authorId);
   }
 
+  @Query(() => Boolean, { name: 'canEditTweet' })
+  async canEditTweet(
+    @Args('userId', { type: () => Number }) userId: number,
+    @Args('tweetId', { type: () => String }) tweetId: string,
+  ): Promise<boolean> {
+    return this.tweetsService.canEdit(userId, tweetId);
+  }
+
   @Mutation(() => Tweet)
   createTweet(
     @Args('createTweetInput') createTweetDto: CreateTweetDto,
