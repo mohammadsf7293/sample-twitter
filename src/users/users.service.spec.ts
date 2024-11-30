@@ -3,6 +3,7 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { User } from './user.entity';
 import { UsersService } from './users.service';
 import { In, Repository } from 'typeorm';
+import { Group } from 'src/groups/group.entity';
 
 const mockUsers = [
   {
@@ -138,6 +139,72 @@ describe('UserService', () => {
       expect(repository.find).toHaveBeenCalledWith({
         where: { id: In(userIds) },
       });
+    });
+  });
+
+  describe('isUserInGroupIds', () => {
+    it('should return true if the user is in at least one of the groups', async () => {
+      const mockGroups: Group[] = [
+        { id: 1, name: 'Group 1' } as Group,
+        { id: 2, name: 'Group 2' } as Group,
+      ];
+      const mockUser: User = {
+        id: 1,
+        name: 'John Doe',
+        groups: mockGroups,
+      } as unknown as User;
+      const groupIds = [2, 3];
+
+      const result = await service.isUserInGroupIds(mockUser, groupIds);
+
+      expect(result).toBe(true);
+    });
+
+    it('should return false if the user is not in any of the groups', async () => {
+      const mockGroups: Group[] = [
+        { id: 1, name: 'Group 1' } as Group,
+        { id: 2, name: 'Group 2' } as Group,
+      ];
+      const mockUser: User = {
+        id: 1,
+        name: 'John Doe',
+        groups: mockGroups,
+      } as unknown as User;
+      const groupIds = [3, 4];
+
+      const result = await service.isUserInGroupIds(mockUser, groupIds);
+
+      expect(result).toBe(false);
+    });
+
+    it('should return false if the user has no groups', async () => {
+      const mockUser: User = {
+        id: 1,
+        name: 'John Doe',
+        groups: [],
+      } as unknown as User;
+      const groupIds = [1, 2];
+
+      const result = await service.isUserInGroupIds(mockUser, groupIds);
+
+      expect(result).toBe(false);
+    });
+
+    it('should return false if the groupIds array is empty', async () => {
+      const mockGroups: Group[] = [
+        { id: 1, name: 'Group 1' } as Group,
+        { id: 2, name: 'Group 2' } as Group,
+      ];
+      const mockUser: User = {
+        id: 1,
+        name: 'John Doe',
+        groups: mockGroups,
+      } as unknown as User;
+      const groupIds: number[] = [];
+
+      const result = await service.isUserInGroupIds(mockUser, groupIds);
+
+      expect(result).toBe(false);
     });
   });
 });

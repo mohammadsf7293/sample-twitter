@@ -37,4 +37,14 @@ export class UsersService {
       where: { id: In(userIds) },
     });
   }
+
+  public async isUserInGroupIds(
+    user: User,
+    groupIds: number[],
+  ): Promise<boolean> {
+    const userGroups = user.groups;
+    return groupIds.some((groupId) =>
+      userGroups.some((group) => group.id === groupId),
+    );
+  }
 }
