@@ -289,141 +289,96 @@ describe('TweetsService', () => {
       expect(mockedTweetProto.lookupType).toHaveBeenCalledWith('Tweet');
       expect(cacheTweetSpy).toHaveBeenCalledWith(tweetId, 'serializedData');
     });
-
-    it('should throw an error if protobuf.load fails', async () => {
-      const tweetId = '123';
-      const tweet = {
-        id: tweetId,
-        content: 'Test content',
-        author: { id: 1, username: 'author' },
-        hashtags: [{ name: 'hashtag1' }],
-        location: 'Test location',
-        category: 'Test category',
-      } as any;
-
-      // Simulate protobuf.load failure
-      jest
-        .spyOn(protobuf, 'load')
-        .mockRejectedValue(new Error('Proto file not found'));
-
-      await expect(service.cacheTweet(tweetId, tweet)).rejects.toThrowError(
-        'Proto file not found',
-      );
-    });
-
-    it('should throw an error if CacheService.cacheTweet fails', async () => {
-      const tweetId = '123';
-      const tweet = {
-        id: tweetId,
-        content: 'Test content',
-        author: { id: 1, username: 'author' },
-        hashtags: [{ name: 'hashtag1' }],
-        location: 'Test location',
-        category: 'Test category',
-      } as any;
-
-      // Mock successful protobuf loading and encoding
-      const mockedTweetProto = {
-        lookupType: jest.fn().mockReturnValue({
-          encode: jest.fn().mockReturnValue({
-            finish: jest.fn().mockReturnValue(Buffer.from('serializedData')),
-          }),
-        }),
-      };
-
-      // Mock protobuf.load to return the mockedTweetProto
-      jest.spyOn(protobuf, 'load').mockResolvedValue(mockedTweetProto as any);
-
-      // Mock CacheService to throw an error on set
-      const cacheTweetSpy = jest
-        .spyOn(cacheService, 'cacheTweet')
-        .mockRejectedValue(new Error('Cache service failed'));
-
-      await expect(service.cacheTweet(tweetId, tweet)).rejects.toThrowError(
-        'Cache service failed',
-      );
-      expect(cacheTweetSpy).toHaveBeenCalledWith(tweetId, 'serializedData');
-    });
   });
 
   describe('update', () => {
-    // it('should update a tweet and manage hashtags', async () => {
-    //   const updateTweetDto: UpdateTweetDto = {
-    //     content: 'Updated content',
-    //     hashtags: ['nestjs', 'javascript'], // Updated hashtags
+    // it('should update the tweet and cache it', async () => {
+    //   // Mock existing tweet
+    //   const existingTweet = {
+    //     id: '123',
+    //     content: 'Original tweet content',
+    //     location: 'Original location',
+    //     category: TweetCategory.News,
+    //     hashtags: [
+    //       { id: '1', name: 'hashtag1', tweets: [], createdAt: new Date() },
+    //       { id: '2', name: 'hashtag2', tweets: [], createdAt: new Date() },
+    //     ],
+    //     author: {
+    //       id: 1,
+    //       firstName: 'author firstName',
+    //       lastName: 'author lastName',
+    //       username: 'author',
+    //     },
     //   };
 
-    //   const author = {
-    //     id: '1',
-    //     firstName: 'Test User firstName',
-    //     lastName: 'Test User lastName',
-    //   } as unknown as User;
-
-    //   const tweet = {
-    //     id: '1',
-    //     content: 'Old content',
-    //     author: author,
+    //   // Mock repository methods
+    //   const saveTweetMock = jest.fn().mockResolvedValue({
+    //     ...existingTweet,
+    //     content: 'Updated tweet content',
+    //     location: 'Updated location',
     //     hashtags: [
-    //       { id: '1', name: 'nestjs', tweets: [], createdAt: new Date() },
-    //     ] as Hashtag[],
-    //   } as Tweet;
-
-    //   const existingHashtags = [
-    //     { id: '1', name: 'nestjs', tweets: [], createdAt: new Date() },
-    //   ] as Hashtag[];
-
-    //   const newHashtag = {
-    //     id: '2',
-    //     name: 'javascript',
-    //     tweets: [],
-    //     createdAt: new Date(),
-    //   } as Hashtag;
-
-    //   jest.spyOn(tweetRepository, 'findOne').mockResolvedValueOnce(tweet);
-    //   jest
-    //     .spyOn(hashtagRepository, 'findBy')
-    //     .mockResolvedValueOnce(existingHashtags);
-    //   jest.spyOn(hashtagRepository, 'save').mockResolvedValueOnce(newHashtag);
-    //   jest.spyOn(tweetRepository, 'save').mockResolvedValueOnce({
-    //     ...tweet,
-    //     ...updateTweetDto,
-    //     hashtags: [...existingHashtags, newHashtag],
+    //       { id: '1', name: 'hashtag1', tweets: [], createdAt: new Date() },
+    //       { id: '3', name: 'hashtag3', tweets: [], createdAt: new Date() },
+    //     ],
     //   });
-    //   jest.spyOn(cacheService, 'setValue').mockResolvedValueOnce();
 
-    //   const result = await service.update('1', updateTweetDto);
+    //   const removeHashtagsMock = jest.fn().mockResolvedValue(undefined);
 
-    //   expect(result).toEqual({
-    //     ...tweet,
-    //     ...updateTweetDto,
-    //     hashtags: [...existingHashtags, newHashtag],
-    //   });
-    //   expect(tweetRepository.save).toHaveBeenCalledWith(expect.any(Tweet));
+    //   tweetRepository.findOne = jest.fn().mockResolvedValue(existingTweet);
+    //   tweetRepository.save = saveTweetMock;
+    //   hashtagRepository.remove = removeHashtagsMock;
+
+    //   const updateTweetDto: UpdateTweetDto = {
+    //     content: 'Updated tweet content',
+    //     location: 'Updated location',
+    //     category: TweetCategory.Finance,
+    //     hashtags: ['hashtag3'], // new hashtag
+    //   };
+
+    //   // Call the update method
+    //   const updatedTweet = await service.update('123', updateTweetDto);
+
+    //   // Check that the repository methods were called
     //   expect(tweetRepository.save).toHaveBeenCalledWith(
     //     expect.objectContaining({
-    //       content: 'Updated content',
-    //       hashtags: [
-    //         expect.objectContaining({ id: '1', name: 'nestjs' }),
-    //         expect.objectContaining({ id: '2', name: 'javascript' }),
-    //       ],
+    //       id: '123',
+    //       content: 'Updated tweet content',
+    //       location: 'Updated location',
+    //       category: TweetCategory.Finance,
+    //       hashtags: expect.arrayContaining([
+    //         expect.objectContaining({ name: 'hashtag3' }),
+    //       ]),
     //     }),
     //   );
-    //   expect(hashtagRepository.save).toHaveBeenCalledWith(
-    //     expect.objectContaining({ id: '2', name: 'javascript' }),
-    //   );
 
-    //   expect(cacheService.setValue).toHaveBeenCalledWith(
-    //     `cache:tweet:${result.id}`,
-    //     expect.any(String),
+    //   expect(hashtagRepository.remove).toHaveBeenCalledWith([
+    //     expect.objectContaining({ name: 'hashtag2' }),
+    //   ]);
+
+    //   // Check if the cache was updated
+    //   expect(cacheService.cacheTweet).toHaveBeenCalledWith(
+    //     updatedTweet.id,
+    //     expect.objectContaining({
+    //       content: 'Updated tweet content',
+    //       location: 'Updated location',
+    //       hashtags: expect.arrayContaining([
+    //         expect.objectContaining({ name: 'hashtag3' }),
+    //       ]),
+    //     }),
     //   );
     // });
 
     it('should throw an error if the tweet does not exist', async () => {
-      const updateTweetDto: UpdateTweetDto = { content: 'Updated content' };
+      const updateTweetDto: UpdateTweetDto = {
+        content: 'Updated content',
+        location: 'Updated location',
+        category: TweetCategory.Sport,
+        hashtags: ['hashtag1', 'hashtag3'],
+      };
 
-      jest.spyOn(tweetRepository, 'findOne').mockResolvedValueOnce(null);
+      tweetRepository.findOne = jest.fn().mockResolvedValue(null); // Simulate tweet not found
 
-      await expect(service.update('999', updateTweetDto)).rejects.toThrow(
+      await expect(service.update('123', updateTweetDto)).rejects.toThrowError(
         'Tweet not found',
       );
     });

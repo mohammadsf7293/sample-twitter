@@ -164,7 +164,7 @@ export class TweetsService {
       (h) => !updateTweetDto.hashtags.includes(h.name),
     );
     await this.hashtagRepository.remove(hashtagsToRemove);
-
+    //TODO: Move this part(and all hashtag related parts) to hashtags service and develop tests for it
     // Add new hashtags to the database
     const newHashtagEntities = await Promise.all(
       newHashtags.map(async (hashtag) => {
@@ -189,27 +189,8 @@ export class TweetsService {
     // Save updated tweet in the database
     const updatedTweet = await this.tweetRepository.save(tweet);
 
-    // Now update the cached proto version (same pattern as create method)
-    const TweetProto = await protobuf.load(path.join(__dirname, 'tweet.proto')); // Ensure correct path
-    const TweetType = TweetProto.lookupType('Tweet'); // Your tweet type as per proto definition
-
-    // Encode updated tweet as per proto schema
-    const encodedTweet = TweetType.encode({
-      id: updatedTweet.id,
-      content: updatedTweet.content,
-      authorId: tweet.author.id,
-      hashtags: updatedTweet.hashtags.map((h) => h.name),
-      location: updatedTweet.location,
-      category: updatedTweet.category,
-    }).finish();
-
-    // Update the cache with the serialized tweet
-    const encodedTweetString = encodedTweet.toString();
-    // Store serialized tweet in Redis
-    await this.CacheService.setValue(
-      `cache:tweet:${updatedTweet.id}`,
-      encodedTweetString,
-    );
+    // Instead of manually serializing, use the cacheTweet method
+    await this.cacheTweet(updatedTweet.id, updatedTweet); // Use the cacheTweet method to handle caching
 
     // Return the updated tweet entity
     return updatedTweet;
