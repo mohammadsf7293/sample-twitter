@@ -52,6 +52,39 @@ export class CacheService {
     }
   }
 
+  async paginatePublicTweetIds(
+    creationTimestampFrom: number,
+    creationTimestampTo: number,
+    offset: number,
+    limit: number,
+  ): Promise<{ score: number; item: string }[]> {
+    try {
+      const members = await this.redis.zrevrangebyscore(
+        CacheKeys.PUBLIC_VIEWABLE_TWEETS_ZSET,
+        creationTimestampFrom,
+        creationTimestampTo,
+        'WITHSCORES',
+        'LIMIT',
+        offset,
+        limit,
+      );
+
+      // Convert the flat array into an array of objects
+      const results = [];
+      for (let i = 0; i < members.length; i += 2) {
+        results.push({
+          item: members[i],
+          score: parseFloat(members[i + 1]), // Convert the score from string to number
+        });
+      }
+
+      return results;
+    } catch (error) {
+      console.error('Error fetching items from zset:', error);
+      throw new Error('Could not find items from Zset');
+    }
+  }
+
   /**
    * Add a private viewable tweet to a ZSET with its creation timestamp as the score.
    * @param groupId - The ID of the group the tweet belongs to.

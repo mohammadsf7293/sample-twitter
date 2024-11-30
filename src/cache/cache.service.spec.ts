@@ -8,6 +8,7 @@ describe('CacheService', () => {
     set: jest.Mock;
     get: jest.Mock;
     zadd: jest.Mock;
+    zrevrangebyscore: jest.Mock;
     expire: jest.Mock;
   };
 
@@ -17,6 +18,7 @@ describe('CacheService', () => {
       set: jest.fn(),
       get: jest.fn(),
       zadd: jest.fn(),
+      zrevrangebyscore: jest.fn(),
       expire: jest.fn(),
     };
 
@@ -413,6 +415,87 @@ describe('CacheService', () => {
       ).rejects.toThrow('Redis connection error');
 
       expect(mockRedisClient.get).toHaveBeenCalledWith(key);
+    });
+  });
+
+  describe('paginatePublicTweetIds', () => {
+    it('should return an array of items with scores', async () => {
+      // Mocking Redis response
+      const mockRedisResponse = ['tweet1', '150', 'tweet2', '145'];
+      mockRedisClient.zrevrangebyscore.mockResolvedValue(mockRedisResponse);
+
+      const result = await service.paginatePublicTweetIds(100, 200, 0, 10);
+
+      expect(result).toEqual([
+        { item: 'tweet1', score: 150 },
+        { item: 'tweet2', score: 145 },
+      ]);
+      expect(mockRedisClient.zrevrangebyscore).toHaveBeenCalledWith(
+        CacheKeys.PUBLIC_VIEWABLE_TWEETS_ZSET,
+        100,
+        200,
+        'WITHSCORES',
+        'LIMIT',
+        0,
+        10,
+      );
+    });
+
+    it('should return an empty array if no members are found', async () => {
+      mockRedisClient.zrevrangebyscore.mockResolvedValue([]);
+
+      const result = await service.paginatePublicTweetIds(100, 200, 0, 10);
+
+      expect(result).toEqual([]);
+      expect(mockRedisClient.zrevrangebyscore).toHaveBeenCalledWith(
+        CacheKeys.PUBLIC_VIEWABLE_TWEETS_ZSET,
+        100,
+        200,
+        'WITHSCORES',
+        'LIMIT',
+        0,
+        10,
+      );
+    });
+
+    it('should throw an error if Redis operation fails', async () => {
+      mockRedisClient.zrevrangebyscore.mockRejectedValue(
+        new Error('Redis error'),
+      );
+
+      await expect(
+        service.paginatePublicTweetIds(100, 200, 0, 10),
+      ).rejects.toThrow('Could not find items from Zset');
+      expect(mockRedisClient.zrevrangebyscore).toHaveBeenCalledWith(
+        CacheKeys.PUBLIC_VIEWABLE_TWEETS_ZSET,
+        100,
+        200,
+        'WITHSCORES',
+        'LIMIT',
+        0,
+        10,
+      );
+    });
+
+    it('should handle a mix of items and scores correctly', async () => {
+      // Mock Redis response with more items
+      const mockRedisResponse = [
+        'tweet1',
+        '150',
+        'tweet2',
+        '145',
+        'tweet3',
+        '140',
+      ];
+      mockRedisClient.zrevrangebyscore.mockResolvedValue(mockRedisResponse);
+
+      const result = await service.paginatePublicTweetIds(100, 200, 0, 10);
+
+      expect(result).toEqual([
+        { item: 'tweet1', score: 150 },
+        { item: 'tweet2', score: 145 },
+        { item: 'tweet3', score: 140 },
+      ]);
     });
   });
 });
