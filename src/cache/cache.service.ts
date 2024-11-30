@@ -43,6 +43,29 @@ export class CacheService {
   }
 
   /**
+   * Retrieves a cached tweet from Redis.
+   *
+   * @param tweetId - The ID of the tweet to retrieve.
+   * @returns The serialized tweet string from the cache.
+   * @throws If the tweet is not found or there is a Redis error.
+   */
+  async getCachedTweet(tweetId: string): Promise<string> {
+    try {
+      const cacheKey = `${CacheKeys.CACHED_TWEET_PREFIX}${tweetId}`;
+      const cachedTweet = await this.redis.get(cacheKey);
+
+      if (!cachedTweet) {
+        throw new Error(`Tweet with ID ${tweetId} not found in cache.`);
+      }
+
+      return cachedTweet;
+    } catch (error) {
+      console.error(`Failed to fetch cached tweet ${tweetId}:`, error);
+      throw new Error(`Could not retrieve cached tweet: ${error.message}`);
+    }
+  }
+
+  /**
    * Add a public viewable tweet to a ZSET with its creation timestamp as the score.
    * @param tweetId - The ID of the tweet.
    * @param hashtags - An array of hashtags associated with the tweet.

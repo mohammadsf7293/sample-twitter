@@ -196,6 +196,51 @@ describe('CacheService', () => {
     });
   });
 
+  describe('getCachedTweet', () => {
+    it('should return the cached tweet string if the tweet is found', async () => {
+      const tweetId = '123';
+      const cachedTweet = 'serialized-tweet-string';
+
+      mockRedisClient.get.mockResolvedValue(cachedTweet);
+
+      const result = await service.getCachedTweet(tweetId);
+
+      expect(result).toBe(cachedTweet);
+      expect(mockRedisClient.get).toHaveBeenCalledWith(
+        `${CacheKeys.CACHED_TWEET_PREFIX}${tweetId}`,
+      );
+    });
+
+    it('should throw an error if the tweet is not found in the cache', async () => {
+      const tweetId = '123';
+      const errorMessage = `Tweet with ID ${tweetId} not found in cache.`;
+
+      // Mocking Redis GET failure (no cache)
+      mockRedisClient.get.mockResolvedValue(null);
+
+      await expect(service.getCachedTweet(tweetId)).rejects.toThrowError(
+        errorMessage,
+      );
+      expect(mockRedisClient.get).toHaveBeenCalledWith(
+        `${CacheKeys.CACHED_TWEET_PREFIX}${tweetId}`,
+      );
+    });
+
+    it('should throw an error if there is a Redis error', async () => {
+      const tweetId = '123';
+      const redisError = new Error('Redis connection error');
+      // Mocking Redis GET failure (error)
+      mockRedisClient.get.mockRejectedValue(redisError);
+
+      await expect(service.getCachedTweet(tweetId)).rejects.toThrowError(
+        `Could not retrieve cached tweet: ${redisError.message}`,
+      );
+      expect(mockRedisClient.get).toHaveBeenCalledWith(
+        `${CacheKeys.CACHED_TWEET_PREFIX}${tweetId}`,
+      );
+    });
+  });
+
   describe('addPublicViewableTweetToZSet', () => {
     it('should add a public tweet to the ZSET with the correct score and value', async () => {
       const tweetId = '12345';
