@@ -125,6 +125,56 @@ export class TweetsService {
     await this.CacheService.cacheTweet(tweet.id, encodedTweetString);
   }
 
+  async getCachedTweet(tweetId: string): Promise<Tweet | null> {
+    try {
+      // Fetch the cached protobuf data
+      const cachedTweetData = await this.CacheService.getCachedTweet(tweetId);
+      if (!cachedTweetData) {
+        return null;
+      }
+
+      // Load the Protobuf schema
+      let protoPath = path.join(__dirname, '../../../src/tweets/tweet.proto');
+      switch (process.env.NODE_ENV) {
+        case 'production':
+          protoPath = path.join(__dirname, 'tweets/tweet.proto');
+          break;
+        case 'test':
+          protoPath = path.join(__dirname, 'tweet.proto');
+      }
+
+      const TweetProto = await protobuf.load(protoPath);
+      const TweetType = TweetProto.lookupType('Tweet');
+
+      // Decode the Protobuf data
+      const decodedTweet = TweetType.decode(
+        Buffer.from(cachedTweetData, 'base64'),
+      );
+      const tweetObject = TweetType.toObject(decodedTweet, {
+        longs: String, // Convert longs to strings if needed
+        enums: String, // Convert enums to strings if needed
+        defaults: true, // Include default values
+      });
+
+      // Convert the plain object to a Tweet entity
+      const tweetEntity = new Tweet();
+      tweetEntity.id = tweetObject.id;
+      tweetEntity.content = tweetObject.content;
+      tweetEntity.author = tweetObject.author;
+      tweetEntity.hashtags = tweetObject.hashtags.map((name) => ({ name })); // Convert hashtags
+      tweetEntity.location = tweetObject.location;
+      tweetEntity.category = tweetObject.category;
+
+      return tweetEntity;
+    } catch (error) {
+      console.error(
+        `Failed to fetch or decode cached tweet ${tweetId}:`,
+        error,
+      );
+      throw new Error(`Could not retrieve cached tweet: ${error.message}`);
+    }
+  }
+
   findAll(): Promise<Tweet[]> {
     return this.tweetRepository.find({
       relations: ['author', 'hashtags', 'parentTweet', 'childTweets'], // Include relations if needed

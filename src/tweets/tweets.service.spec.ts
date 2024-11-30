@@ -38,6 +38,7 @@ const mockCacheService = {
   setValue: jest.fn(),
   getValue: jest.fn(),
   cacheTweet: jest.fn(),
+  getCachedTweet: jest.fn(),
   addPublicViewableTweetToZSet: jest.fn(),
   addPrivateViewableTweetToZSet: jest.fn(),
   setTweetIsPublicEditable: jest.fn(),
@@ -288,6 +289,108 @@ describe('TweetsService', () => {
       expect(protobuf.load).toHaveBeenCalledWith(mockedProtoPath);
       expect(mockedTweetProto.lookupType).toHaveBeenCalledWith('Tweet');
       expect(cacheTweetSpy).toHaveBeenCalledWith(tweetId, 'serializedData');
+    });
+  });
+
+  describe('getCachedTweet', () => {
+    it('should return null if no cached data is found', async () => {
+      jest.spyOn(cacheService, 'getCachedTweet').mockResolvedValue(null);
+
+      const result = await service.getCachedTweet('123');
+      expect(result).toBeNull();
+      expect(cacheService.getCachedTweet).toHaveBeenCalledWith('123');
+    });
+
+    it('should return a Tweet entity if cached data is found', async () => {
+      const cachedTweetData = Buffer.from('test-data').toString('base64');
+      jest
+        .spyOn(cacheService, 'getCachedTweet')
+        .mockResolvedValue(cachedTweetData);
+
+      const protoPath = path.join(__dirname, 'tweet.proto');
+      const mockTweetProto = {
+        decode: jest.fn().mockReturnValue({
+          id: '123',
+          content: 'Test tweet content',
+          author: {
+            id: 1,
+            firstName: 'Author',
+            lastName: 'Last',
+            username: 'author',
+          },
+          hashtags: ['hashtag1', 'hashtag2'],
+          location: 'Test location',
+          category: TweetCategory.News,
+        }),
+        toObject: jest.fn().mockReturnValue({
+          id: '123',
+          content: 'Test tweet content',
+          author: {
+            id: 1,
+            firstName: 'Author',
+            lastName: 'Last',
+            username: 'author',
+          },
+          hashtags: ['hashtag1', 'hashtag2'],
+          location: 'Test location',
+          category: TweetCategory.News,
+        }),
+      };
+      jest.spyOn(protobuf, 'load').mockResolvedValue({
+        lookupType: jest.fn().mockReturnValue(mockTweetProto),
+      } as any);
+
+      const result = await service.getCachedTweet('123');
+
+      expect(result).toEqual(
+        expect.objectContaining({
+          id: '123',
+          content: 'Test tweet content',
+          author: {
+            id: 1,
+            firstName: 'Author',
+            lastName: 'Last',
+            username: 'author',
+          },
+          hashtags: [{ name: 'hashtag1' }, { name: 'hashtag2' }],
+          location: 'Test location',
+          category: TweetCategory.News,
+        }),
+      );
+      expect(cacheService.getCachedTweet).toHaveBeenCalledWith('123');
+      expect(protobuf.load).toHaveBeenCalledWith(protoPath);
+      expect(mockTweetProto.decode).toHaveBeenCalled();
+      expect(mockTweetProto.toObject).toHaveBeenCalled();
+    });
+
+    it('should throw an error if protobuf decoding fails', async () => {
+      const cachedTweetData = Buffer.from('test-data').toString('base64');
+      jest
+        .spyOn(cacheService, 'getCachedTweet')
+        .mockResolvedValue(cachedTweetData);
+
+      jest.spyOn(protobuf, 'load').mockResolvedValue({
+        lookupType: jest.fn().mockReturnValue({
+          decode: jest.fn().mockImplementation(() => {
+            throw new Error('Decoding failed');
+          }),
+        }),
+      } as any);
+
+      await expect(service.getCachedTweet('123')).rejects.toThrowError(
+        'Could not retrieve cached tweet: Decoding failed',
+      );
+    });
+
+    it('should throw an error if CacheService fails', async () => {
+      jest
+        .spyOn(cacheService, 'getCachedTweet')
+        .mockRejectedValue(new Error('Cache retrieval error'));
+
+      await expect(service.getCachedTweet('123')).rejects.toThrowError(
+        'Could not retrieve cached tweet: Cache retrieval error',
+      );
+      expect(cacheService.getCachedTweet).toHaveBeenCalledWith('123');
     });
   });
 
