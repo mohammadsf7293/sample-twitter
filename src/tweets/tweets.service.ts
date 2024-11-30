@@ -175,6 +175,78 @@ export class TweetsService {
     }
   }
 
+  async paginateTweets(
+    userId: number,
+    limit: number,
+    page: number,
+  ): Promise<{ nodes: Tweet[]; hasNextPage: boolean }> {
+    const user = await this.usersService.findOneWithRelations(userId, [
+      'groups',
+    ]);
+    if (!user) {
+      throw new Error('User not found');
+    }
+
+    // Determine the starting index for pagination
+    const offset = (page - 1) * limit;
+
+    const nowStamp = Date.now();
+    // Here we create timeStamp range (creation date range) of tweets we want to fetch
+    // These parameters could also be added to GraphQL params if needed
+    //toStamp is timestamp to which tweets must be fetched
+    const toStamp = nowStamp;
+    //fromStamp is timestmap from which tweets must be fetched
+    const fromStamp = nowStamp - 7 * 86400;
+
+    // Fetch tweet IDs (public + private for the user)
+    const publicTweetCachedItems =
+      await this.CacheService.paginatePublicTweetIds(
+        fromStamp,
+        toStamp,
+        offset,
+        limit,
+      );
+
+    let privateTweetCachedItems: { score: number; item: string }[] = [];
+    user.groups.forEach(async (group) => {
+      const fetchedItems = await this.CacheService.paginatePrivateTweetIds(
+        group.id,
+        fromStamp,
+        toStamp,
+        offset,
+        limit,
+      );
+
+      privateTweetCachedItems = [...privateTweetCachedItems, ...fetchedItems];
+    });
+
+    // Combine and deduplicate tweet IDs
+    const allTweetCachedItems = [
+      ...new Set([...publicTweetCachedItems, ...privateTweetCachedItems]),
+    ];
+
+    // Sort tweets by createdAt in descending order (based on their score which is tweet's created at stamp stored in cache layer)
+    allTweetCachedItems.sort((a, b) => b.score - a.score);
+
+    // Fetch tweets by ID using getCachedTweet
+    const tweets = await Promise.all(
+      allTweetCachedItems.map((itemKey) =>
+        this.getCachedTweet(itemKey.item.split('_')[0]),
+      ),
+    );
+
+    // Filter out null results (in case a cached tweet is missing or invalid)
+    const validTweets = tweets.filter((tweet) => tweet !== null);
+
+    // Paginate the results
+    const paginatedTweets = validTweets.slice(0, limit);
+
+    return {
+      nodes: paginatedTweets,
+      hasNextPage: validTweets.length > limit,
+    };
+  }
+
   findAll(): Promise<Tweet[]> {
     return this.tweetRepository.find({
       relations: ['author', 'hashtags', 'parentTweet', 'childTweets'], // Include relations if needed
