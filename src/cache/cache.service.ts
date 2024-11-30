@@ -20,6 +20,29 @@ export class CacheService {
   }
 
   /**
+   * Stores a serialized tweet in Redis.
+   *
+   * @param tweetId - The ID of the tweet to be cached.
+   * @param serializedTweetStr - The serialized tweet data in string format.
+   */
+  async cacheTweet(tweetId: string, serializedTweetStr: string): Promise<void> {
+    try {
+      const cacheKey = `${CacheKeys.CACHED_TWEET_PREFIX}${tweetId}`;
+      await this.redis.set(
+        cacheKey,
+        serializedTweetStr,
+        'EX',
+        CacheKeysTTLs.CACHED_TWEET,
+      );
+
+      console.log(`Tweet ${tweetId} cached successfully.`);
+    } catch (error) {
+      console.error(`Failed to cache tweet ${tweetId}:`, error);
+      throw new Error(`Could not cache tweet: ${error.message}`);
+    }
+  }
+
+  /**
    * Add a public viewable tweet to a ZSET with its creation timestamp as the score.
    * @param tweetId - The ID of the tweet.
    * @param hashtags - An array of hashtags associated with the tweet.

@@ -1,4 +1,5 @@
 export const CacheKeys = {
+  CACHED_TWEET_PREFIX: 'cache:tweet:',
   PUBLIC_VIEWABLE_TWEETS_ZSET: 'tweets:public',
   PRIVATE_GROUP_VIEWABLE_TWEETS_ZSET_PREFIX: 'tweets:group:',
   PUBLIC_EDITABLE_TWEET_PREFIX: 'tweet:public-editable:',
@@ -7,6 +8,7 @@ export const CacheKeys = {
 
 const DAY_TTL = 86400;
 export const CacheKeysTTLs = {
+  CACHED_TWEET: 30 * DAY_TTL,
   PUBLIC_VIEWABLE_TWEETS_ZSET: 1 * 365 * DAY_TTL,
   PUBLIC_EDITABLE_TWEET: 30 * DAY_TTL,
   GROUP_EDITABLE_TWEET: 30 * DAY_TTL,

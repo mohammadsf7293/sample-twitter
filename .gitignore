@@ -5,6 +5,7 @@
 
 # Logs
 .vscode
+.vscode/settings.json
 logs
 *.log
 npm-debug.log*

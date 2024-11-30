@@ -121,6 +121,81 @@ describe('CacheService', () => {
     });
   });
 
+  describe('cacheTweet', () => {
+    const tweetId = '12345';
+    const serializedTweetStr = '{"id":"12345","content":"Hello world"}';
+    const cacheKey = `${CacheKeys.CACHED_TWEET_PREFIX}${tweetId}`;
+
+    it('should cache the tweet successfully', async () => {
+      mockRedisClient.set.mockResolvedValue('OK');
+
+      await service.cacheTweet(tweetId, serializedTweetStr);
+
+      expect(mockRedisClient.set).toHaveBeenCalledWith(
+        cacheKey,
+        serializedTweetStr,
+        'EX',
+        expect.any(Number), // CacheKeysTTLs.CACHED_TWEET
+      );
+      expect(mockRedisClient.set).toHaveBeenCalledTimes(1);
+    });
+
+    it('should throw an error if Redis fails', async () => {
+      mockRedisClient.set.mockRejectedValue(new Error('Redis error'));
+
+      await expect(
+        service.cacheTweet(tweetId, serializedTweetStr),
+      ).rejects.toThrow('Could not cache tweet: Redis error');
+
+      expect(mockRedisClient.set).toHaveBeenCalledWith(
+        cacheKey,
+        serializedTweetStr,
+        'EX',
+        expect.any(Number),
+      );
+    });
+
+    it('should use the correct cache key format', async () => {
+      mockRedisClient.set.mockResolvedValue('OK');
+
+      await service.cacheTweet(tweetId, serializedTweetStr);
+
+      expect(mockRedisClient.set).toHaveBeenCalledWith(
+        cacheKey,
+        serializedTweetStr,
+        'EX',
+        expect.any(Number),
+      );
+    });
+
+    it('should log success message when caching succeeds', async () => {
+      const consoleLogSpy = jest.spyOn(console, 'log').mockImplementation();
+      mockRedisClient.set.mockResolvedValue('OK');
+
+      await service.cacheTweet(tweetId, serializedTweetStr);
+
+      expect(consoleLogSpy).toHaveBeenCalledWith(
+        `Tweet ${tweetId} cached successfully.`,
+      );
+      consoleLogSpy.mockRestore();
+    });
+
+    it('should log error message when caching fails', async () => {
+      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
+      mockRedisClient.set.mockRejectedValue(new Error('Redis error'));
+
+      await expect(
+        service.cacheTweet(tweetId, serializedTweetStr),
+      ).rejects.toThrow();
+
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        `Failed to cache tweet ${tweetId}:`,
+        expect.any(Error),
+      );
+      consoleErrorSpy.mockRestore();
+    });
+  });
+
   describe('addPublicViewableTweetToZSet', () => {
     it('should add a public tweet to the ZSET with the correct score and value', async () => {
       const tweetId = '12345';
