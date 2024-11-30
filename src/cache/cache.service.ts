@@ -117,6 +117,41 @@ export class CacheService {
     }
   }
 
+  async paginatePrivateTweetIds(
+    groupId: number,
+    creationTimestampFrom: number,
+    creationTimestampTo: number,
+    offset: number,
+    limit: number,
+  ): Promise<{ score: number; item: string }[]> {
+    try {
+      const key = `${CacheKeys.PRIVATE_GROUP_VIEWABLE_TWEETS_ZSET_PREFIX}${groupId.toString()}`;
+      const members = await this.redis.zrevrangebyscore(
+        key,
+        creationTimestampFrom,
+        creationTimestampTo,
+        'WITHSCORES',
+        'LIMIT',
+        offset,
+        limit,
+      );
+
+      // Convert the flat array into an array of objects
+      const results = [];
+      for (let i = 0; i < members.length; i += 2) {
+        results.push({
+          item: members[i],
+          score: parseFloat(members[i + 1]), // Convert the score from string to number
+        });
+      }
+
+      return results;
+    } catch (error) {
+      console.error('Error fetching items from zset:', error);
+      throw new Error('Could not find items from Zset');
+    }
+  }
+
   async setTweetIsPublicEditable(tweetId: string): Promise<void> {
     const key = CacheKeys.PUBLIC_EDITABLE_TWEET_PREFIX + `${tweetId}`;
     const ttl = CacheKeysTTLs.PUBLIC_EDITABLE_TWEET;

@@ -498,4 +498,108 @@ describe('CacheService', () => {
       ]);
     });
   });
+
+  //INJA => Private
+  describe('paginatePrivateTweetIds', () => {
+    it('should return an array of items with scores', async () => {
+      // Mocking Redis response
+      const mockRedisResponse = ['tweet1', '150', 'tweet2', '145'];
+      mockRedisClient.zrevrangebyscore.mockResolvedValue(mockRedisResponse);
+
+      const groupId = 1;
+      const result = await service.paginatePrivateTweetIds(
+        groupId,
+        100,
+        200,
+        0,
+        10,
+      );
+
+      expect(result).toEqual([
+        { item: 'tweet1', score: 150 },
+        { item: 'tweet2', score: 145 },
+      ]);
+      expect(mockRedisClient.zrevrangebyscore).toHaveBeenCalledWith(
+        `${CacheKeys.PRIVATE_GROUP_VIEWABLE_TWEETS_ZSET_PREFIX}${groupId.toString()}`,
+        100,
+        200,
+        'WITHSCORES',
+        'LIMIT',
+        0,
+        10,
+      );
+    });
+
+    it('should return an empty array if no members are found', async () => {
+      mockRedisClient.zrevrangebyscore.mockResolvedValue([]);
+
+      const groupId = 1;
+      const result = await service.paginatePrivateTweetIds(
+        groupId,
+        100,
+        200,
+        0,
+        10,
+      );
+
+      expect(result).toEqual([]);
+      expect(mockRedisClient.zrevrangebyscore).toHaveBeenCalledWith(
+        `${CacheKeys.PRIVATE_GROUP_VIEWABLE_TWEETS_ZSET_PREFIX}${groupId.toString()}`,
+        100,
+        200,
+        'WITHSCORES',
+        'LIMIT',
+        0,
+        10,
+      );
+    });
+
+    it('should throw an error if Redis operation fails', async () => {
+      mockRedisClient.zrevrangebyscore.mockRejectedValue(
+        new Error('Redis error'),
+      );
+
+      const groupId = 1;
+      await expect(
+        service.paginatePrivateTweetIds(groupId, 100, 200, 0, 10),
+      ).rejects.toThrow('Could not find items from Zset');
+      expect(mockRedisClient.zrevrangebyscore).toHaveBeenCalledWith(
+        `${CacheKeys.PRIVATE_GROUP_VIEWABLE_TWEETS_ZSET_PREFIX}${groupId.toString()}`,
+        100,
+        200,
+        'WITHSCORES',
+        'LIMIT',
+        0,
+        10,
+      );
+    });
+
+    it('should handle a mix of items and scores correctly', async () => {
+      // Mock Redis response with more items
+      const mockRedisResponse = [
+        'tweet1',
+        '150',
+        'tweet2',
+        '145',
+        'tweet3',
+        '140',
+      ];
+      mockRedisClient.zrevrangebyscore.mockResolvedValue(mockRedisResponse);
+
+      const groupId = 1;
+      const result = await service.paginatePrivateTweetIds(
+        groupId,
+        100,
+        200,
+        0,
+        10,
+      );
+
+      expect(result).toEqual([
+        { item: 'tweet1', score: 150 },
+        { item: 'tweet2', score: 145 },
+        { item: 'tweet3', score: 140 },
+      ]);
+    });
+  });
 });
