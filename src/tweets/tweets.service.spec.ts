@@ -11,6 +11,7 @@ import { CacheService } from '../cache/cache.service';
 import { GroupsService } from '../groups/groups.service';
 import { UpdateTweetPermissionsDto } from './dto/update-tweet-permissions.dto';
 import { Group } from 'src/groups/group.entity';
+import { UsersService } from '../users/users.service';
 
 const mockTweetRepository = {
   create: jest.fn(),
@@ -49,12 +50,32 @@ const mockGroupsService = {
   create: jest.fn(),
 };
 
+const mockUsersService = {
+  isUserInGroupIds: jest.fn(),
+};
+
+const mockTweet = {
+  id: '1',
+  content: 'Test tweet',
+  author: { id: 1 },
+  editableGroups: [{ id: 1 }, { id: 2 }],
+  parentTweet: null,
+  hashtags: [],
+} as Tweet;
+
+const mockUser = {
+  id: 1,
+  name: 'Test User',
+  groups: [{ id: 1 }],
+} as unknown as User;
+
 describe('TweetsService', () => {
   let service: TweetsService;
   let tweetRepository: Repository<Tweet>;
   let userRepository: Repository<User>;
   let hashtagRepository: Repository<Hashtag>;
   let cacheService: CacheService;
+  let usersService: UsersService;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -80,6 +101,10 @@ describe('TweetsService', () => {
           provide: GroupsService,
           useValue: mockGroupsService,
         },
+        {
+          provide: UsersService,
+          useValue: mockUsersService,
+        },
       ],
     }).compile();
 
@@ -90,6 +115,7 @@ describe('TweetsService', () => {
       getRepositoryToken(Hashtag),
     );
     cacheService = module.get<CacheService>(CacheService);
+    usersService = module.get<UsersService>(UsersService);
   });
 
   afterEach(() => {
@@ -894,6 +920,89 @@ describe('TweetsService', () => {
         creatorId: authorId,
         parentGroupId: null,
       });
+    });
+  });
+
+  describe('canEdit', () => {
+    it('should throw an error if tweet is not found', async () => {
+      mockTweetRepository.findOne.mockResolvedValueOnce(null);
+      mockUserRepository.findOne.mockResolvedValueOnce(mockUser);
+
+      await expect(service.canEdit(mockUser.id, mockTweet.id)).rejects.toThrow(
+        'Tweet not found',
+      );
+
+      expect(tweetRepository.findOne).toHaveBeenCalledWith({
+        where: { id: mockTweet.id },
+        relations: ['author', 'hashtags', 'parentTweet', 'editableGroups'],
+      });
+    });
+
+    it('should throw an error if user is not found', async () => {
+      mockTweetRepository.findOne.mockResolvedValueOnce(mockTweet);
+      mockUserRepository.findOne.mockResolvedValueOnce(null);
+
+      await expect(service.canEdit(mockUser.id, mockTweet.id)).rejects.toThrow(
+        'User not found',
+      );
+
+      expect(userRepository.findOne).toHaveBeenCalledWith({
+        where: { id: mockUser.id },
+      });
+    });
+
+    it('should return true if tweet is public editable', async () => {
+      mockTweetRepository.findOne.mockResolvedValueOnce(mockTweet);
+      mockUserRepository.findOne.mockResolvedValueOnce(mockUser);
+      jest
+        .spyOn(service, 'determineTweetEditability')
+        .mockResolvedValueOnce([0, 'public']);
+
+      const result = await service.canEdit(mockUser.id, mockTweet.id);
+
+      expect(result).toBe(true);
+      expect(tweetRepository.findOne).toHaveBeenCalledWith({
+        where: { id: mockTweet.id },
+        relations: ['author', 'hashtags', 'parentTweet', 'editableGroups'],
+      });
+      expect(userRepository.findOne).toHaveBeenCalledWith({
+        where: { id: mockUser.id },
+      });
+      expect(service.determineTweetEditability).toHaveBeenCalled();
+    });
+
+    it('should return true if user is in allowed groups', async () => {
+      mockTweetRepository.findOne.mockResolvedValueOnce(mockTweet);
+      mockUserRepository.findOne.mockResolvedValueOnce(mockUser);
+      jest
+        .spyOn(service, 'determineTweetEditability')
+        .mockResolvedValueOnce([0, [], [1, 2]]);
+      mockUsersService.isUserInGroupIds.mockResolvedValueOnce(true);
+
+      const result = await service.canEdit(mockUser.id, mockTweet.id);
+
+      expect(result).toBe(true);
+      expect(usersService.isUserInGroupIds).toHaveBeenCalledWith(
+        mockUser,
+        [1, 2],
+      );
+    });
+
+    it('should return false if user is not in allowed groups', async () => {
+      mockTweetRepository.findOne.mockResolvedValueOnce(mockTweet);
+      mockUserRepository.findOne.mockResolvedValueOnce(mockUser);
+      jest
+        .spyOn(service, 'determineTweetEditability')
+        .mockResolvedValueOnce([0, [], [1, 2]]);
+      mockUsersService.isUserInGroupIds.mockResolvedValueOnce(false);
+
+      const result = await service.canEdit(mockUser.id, mockTweet.id);
+
+      expect(result).toBe(false);
+      expect(usersService.isUserInGroupIds).toHaveBeenCalledWith(
+        mockUser,
+        [1, 2],
+      );
     });
   });
 

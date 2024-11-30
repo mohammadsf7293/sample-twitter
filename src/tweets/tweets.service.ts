@@ -12,6 +12,7 @@ import * as path from 'path';
 import { Group } from '../groups/group.entity';
 import { GroupsService } from '../groups/groups.service';
 import { UpdateTweetPermissionsDto } from './dto/update-tweet-permissions.dto';
+import { UsersService } from '../users/users.service';
 
 @Injectable()
 export class TweetsService {
@@ -26,6 +27,8 @@ export class TweetsService {
     private readonly hashtagRepository: Repository<Hashtag>,
 
     private readonly groupsService: GroupsService,
+
+    private readonly usersService: UsersService,
 
     private readonly CacheService: CacheService,
   ) {}
@@ -87,6 +90,7 @@ export class TweetsService {
 
     // Serialize the tweet to protobuf
     // protoPath is default for dev environment
+    //TODO: update tweet path in edit tweet (update tweet)
     let protoPath = path.join(__dirname, '../../../src/tweets/tweet.proto');
     switch (process.env.NODE_ENV) {
       case 'production':
@@ -221,6 +225,47 @@ export class TweetsService {
       where: { author: { id: authorId } },
       relations: ['author', 'hashtags', 'parentTweet', 'childTweets'],
     });
+  }
+
+  async canEdit(userId: number, tweetId: string): Promise<boolean> {
+    const tweet = await this.tweetRepository.findOne({
+      where: { id: tweetId },
+      relations: ['author', 'hashtags', 'parentTweet', 'editableGroups'],
+    });
+
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
+    });
+    if (!user) {
+      throw new Error('User not found');
+    }
+
+    if (!tweet) {
+      throw new Error('Tweet not found');
+    }
+
+    const tweetEditPermissions = await this.determineTweetEditability(
+      tweet,
+      [],
+      tweet.editableGroups.map((group) => group.id),
+      0,
+    );
+
+    if (tweetEditPermissions.length === 2) {
+      // Tweet is public editable
+      return true;
+    } else if (tweetEditPermissions.length === 3) {
+      const viewPermissionGroupIds = tweetEditPermissions[2];
+      // Check if user belongs to any of the allowed groups
+      const isUserInGroup = await this.usersService.isUserInGroupIds(
+        user,
+        viewPermissionGroupIds,
+      );
+      return isUserInGroup;
+    }
+
+    // Default case: user cannot edit
+    return false;
   }
 
   async determineTweetVisibility(
