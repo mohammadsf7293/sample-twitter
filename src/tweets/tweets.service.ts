@@ -122,6 +122,35 @@ export class TweetsService {
     return savedTweet;
   }
 
+  async cacheTweet(tweetId: string, tweet: Tweet): Promise<void> {
+    // Serialize the tweet to protobuf
+    let protoPath = path.join(__dirname, '../../../src/tweets/tweet.proto');
+    switch (process.env.NODE_ENV) {
+      case 'production':
+        protoPath = path.join(__dirname, 'tweets/tweet.proto');
+        break;
+      case 'test':
+        protoPath = path.join(__dirname, 'tweet.proto');
+    }
+
+    const TweetProto = await protobuf.load(protoPath);
+    const TweetType = TweetProto.lookupType('Tweet');
+
+    const encodedTweet = TweetType.encode({
+      id: tweet.id,
+      content: tweet.content,
+      authorId: tweet.author.id,
+      hashtags: tweet.hashtags.map((h) => h.name),
+      location: tweet.location,
+      category: tweet.category,
+    }).finish();
+
+    const encodedTweetString = encodedTweet.toString();
+
+    // Store serialized tweet in Redis using CacheService's cacheTweet method
+    await this.CacheService.cacheTweet(tweetId, encodedTweetString);
+  }
+
   findAll(): Promise<Tweet[]> {
     return this.tweetRepository.find({
       relations: ['author', 'hashtags', 'parentTweet', 'childTweets'], // Include relations if needed

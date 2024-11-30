@@ -12,6 +12,8 @@ import { GroupsService } from '../groups/groups.service';
 import { UpdateTweetPermissionsDto } from './dto/update-tweet-permissions.dto';
 import { Group } from 'src/groups/group.entity';
 import { UsersService } from '../users/users.service';
+import * as protobuf from 'protobufjs';
+import * as path from 'path';
 
 const mockTweetRepository = {
   create: jest.fn(),
@@ -36,6 +38,7 @@ const mockHashtagRepository = {
 const mockCacheService = {
   setValue: jest.fn(),
   getValue: jest.fn(),
+  cacheTweet: jest.fn(),
   addPublicViewableTweetToZSet: jest.fn(),
   addPrivateViewableTweetToZSet: jest.fn(),
   setTweetIsPublicEditable: jest.fn(),
@@ -221,6 +224,101 @@ describe('TweetsService', () => {
       await expect(service.create(createTweetDto)).rejects.toThrow(
         'Parent tweet not found',
       );
+    });
+  });
+
+  describe('cacheTweet', () => {
+    it('should serialize the tweet and call cacheTweet method in CacheService', async () => {
+      const tweetId = '123';
+
+      // Mock Tweet object
+      const tweet = {
+        id: tweetId,
+        content: 'Test content',
+        author: { id: 1, username: 'author' },
+        hashtags: [{ name: 'hashtag1' }, { name: 'hashtag2' }],
+        location: 'Test location',
+        category: 'Test category',
+      } as any;
+
+      // Mock the protobuf.load and protobuf.encode calls
+      const mockedProtoPath = path.join(__dirname, 'tweet.proto');
+      const mockedTweetProto = {
+        lookupType: jest.fn().mockReturnValue({
+          encode: jest.fn().mockReturnValue({
+            finish: jest.fn().mockReturnValue(Buffer.from('serializedData')),
+          }),
+        }),
+      };
+
+      // Mock protobuf.load to return the mockedTweetProto
+      jest.spyOn(protobuf, 'load').mockResolvedValue(mockedTweetProto as any);
+
+      // Mock cacheService.cacheTweet to track calls
+      const cacheTweetSpy = jest.spyOn(cacheService, 'cacheTweet');
+
+      // Call the cacheTweet method
+      await service.cacheTweet(tweetId, tweet);
+
+      // Assertions
+      expect(protobuf.load).toHaveBeenCalledWith(mockedProtoPath);
+      expect(mockedTweetProto.lookupType).toHaveBeenCalledWith('Tweet');
+      expect(cacheTweetSpy).toHaveBeenCalledWith(tweetId, 'serializedData');
+    });
+
+    it('should throw an error if protobuf.load fails', async () => {
+      const tweetId = '123';
+      const tweet = {
+        id: tweetId,
+        content: 'Test content',
+        author: { id: 1, username: 'author' },
+        hashtags: [{ name: 'hashtag1' }],
+        location: 'Test location',
+        category: 'Test category',
+      } as any;
+
+      // Simulate protobuf.load failure
+      jest
+        .spyOn(protobuf, 'load')
+        .mockRejectedValue(new Error('Proto file not found'));
+
+      await expect(service.cacheTweet(tweetId, tweet)).rejects.toThrowError(
+        'Proto file not found',
+      );
+    });
+
+    it('should throw an error if CacheService.cacheTweet fails', async () => {
+      const tweetId = '123';
+      const tweet = {
+        id: tweetId,
+        content: 'Test content',
+        author: { id: 1, username: 'author' },
+        hashtags: [{ name: 'hashtag1' }],
+        location: 'Test location',
+        category: 'Test category',
+      } as any;
+
+      // Mock successful protobuf loading and encoding
+      const mockedTweetProto = {
+        lookupType: jest.fn().mockReturnValue({
+          encode: jest.fn().mockReturnValue({
+            finish: jest.fn().mockReturnValue(Buffer.from('serializedData')),
+          }),
+        }),
+      };
+
+      // Mock protobuf.load to return the mockedTweetProto
+      jest.spyOn(protobuf, 'load').mockResolvedValue(mockedTweetProto as any);
+
+      // Mock CacheService to throw an error on set
+      const cacheTweetSpy = jest
+        .spyOn(cacheService, 'cacheTweet')
+        .mockRejectedValue(new Error('Cache service failed'));
+
+      await expect(service.cacheTweet(tweetId, tweet)).rejects.toThrowError(
+        'Cache service failed',
+      );
+      expect(cacheTweetSpy).toHaveBeenCalledWith(tweetId, 'serializedData');
     });
   });
 
