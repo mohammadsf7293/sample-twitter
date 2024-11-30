@@ -45,6 +45,7 @@ describe('UserService', () => {
           provide: getRepositoryToken(User),
           useValue: {
             find: jest.fn().mockResolvedValue(mockUsers),
+            findOne: jest.fn(),
             findOneBy: jest.fn().mockResolvedValue(oneUser),
             save: jest.fn().mockResolvedValue(oneUser),
             remove: jest.fn(),
@@ -93,6 +94,70 @@ describe('UserService', () => {
       const repoSpy = jest.spyOn(repository, 'findOneBy');
       expect(service.findOne(1)).resolves.toEqual(oneUser);
       expect(repoSpy).toBeCalledWith({ id: 1 });
+    });
+  });
+
+  describe('findOneWithRelations', () => {
+    it('should return a user with specified relations', async () => {
+      const mockUser: User = {
+        id: 1,
+        name: 'John Doe',
+        groups: [{ id: 101, name: 'Group 1' }],
+      } as any;
+
+      jest.spyOn(repository, 'findOne').mockResolvedValue(mockUser);
+
+      const result = await service.findOneWithRelations(1, ['groups']);
+
+      expect(repository.findOne).toHaveBeenCalledWith({
+        where: { id: 1 },
+        relations: ['groups'],
+      });
+      expect(result).toEqual(mockUser);
+    });
+
+    it('should return null if the user is not found', async () => {
+      jest.spyOn(repository, 'findOne').mockResolvedValue(null);
+
+      const result = await service.findOneWithRelations(999, ['groups']);
+
+      expect(repository.findOne).toHaveBeenCalledWith({
+        where: { id: 999 },
+        relations: ['groups'],
+      });
+      expect(result).toBeNull();
+    });
+
+    it('should handle an empty relations array', async () => {
+      const mockUser: User = {
+        id: 1,
+        name: 'John Doe',
+      } as any;
+
+      jest.spyOn(repository, 'findOne').mockResolvedValue(mockUser);
+
+      const result = await service.findOneWithRelations(1, []);
+
+      expect(repository.findOne).toHaveBeenCalledWith({
+        where: { id: 1 },
+        relations: [],
+      });
+      expect(result).toEqual(mockUser);
+    });
+
+    it('should throw an error if the repository throws', async () => {
+      jest
+        .spyOn(repository, 'findOne')
+        .mockRejectedValue(new Error('Database error'));
+
+      await expect(service.findOneWithRelations(1, ['groups'])).rejects.toThrow(
+        'Database error',
+      );
+
+      expect(repository.findOne).toHaveBeenCalledWith({
+        where: { id: 1 },
+        relations: ['groups'],
+      });
     });
   });
 

@@ -28,6 +28,13 @@ export class UsersService {
     return this.usersRepository.findOneBy({ id: id });
   }
 
+  findOneWithRelations(id: number, relations: string[]): Promise<User> {
+    return this.usersRepository.findOne({
+      where: { id: id },
+      relations: relations,
+    });
+  }
+
   async remove(id: number): Promise<void> {
     await this.usersRepository.delete(id);
   }
