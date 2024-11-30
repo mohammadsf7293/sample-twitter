@@ -36,6 +36,29 @@ export class TweetsResolver {
     return this.tweetsService.canEdit(userId, tweetId);
   }
 
+  @Query(() => PaginatedTweets)
+  async paginateTweets(
+    @Args('userId', { type: () => Number }) userId: number,
+    @Args('limit', { type: () => Number }) limit: number,
+    @Args('page', { type: () => Number }) page: number,
+  ): Promise<PaginatedTweets> {
+    const { nodes, hasNextPage } = await this.tweetsService.paginateTweets(
+      userId,
+      limit,
+      page,
+    );
+
+    // Manually map entities to GraphQL models (if needed)
+    const mappedNodes = nodes.map((tweetEntity) =>
+      this.toGraphQLTweet(tweetEntity),
+    );
+
+    return {
+      nodes: mappedNodes,
+      hasNextPage,
+    };
+  }
+
   private toGraphQLTweet(tweetEntity: Tweet): TweetDTO {
     return {
       id: tweetEntity.id,

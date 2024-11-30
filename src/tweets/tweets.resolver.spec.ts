@@ -2,7 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { TweetsResolver } from './tweets.resolver';
 import { TweetsService } from './tweets.service';
 import { Tweet, TweetCategory } from './tweet.entity';
-import { Tweet as TweetDTO } from 'src/graphql.schema';
+import { PaginatedTweets, Tweet as TweetDTO } from 'src/graphql.schema';
 import { CreateTweetDto } from './dto/create-tweet.dto';
 import { UpdateTweetDto } from './dto/update-tweet.dto';
 import { UpdateTweetPermissionsDto } from './dto/update-tweet-permissions.dto';
@@ -27,6 +27,7 @@ const mockTweetsService = {
   remove: jest.fn().mockResolvedValue(undefined),
   updateTweetPermissions: jest.fn(),
   canEdit: jest.fn(),
+  paginateTweets: jest.fn(),
 };
 
 describe('TweetsResolver', () => {
@@ -175,6 +176,177 @@ describe('TweetsResolver', () => {
       const result = await resolver.canEditTweet(1, '12345');
       expect(result).toBe(false);
       expect(service.canEdit).toHaveBeenCalledWith(1, '12345');
+    });
+  });
+
+  describe('paginateTweets', () => {
+    it('should return paginated tweets', async () => {
+      const mockTweets = [
+        {
+          id: '1',
+          createdAt: new Date('2024-01-01T00:00:00Z'),
+          updatedAt: new Date('2024-01-02T00:00:00Z'),
+          content: 'Tweet 1',
+          hashtags: [{ id: '1', name: '#hashtag1' } as Hashtag],
+          author: { id: '123' },
+          parentTweet: null,
+          category: 'Category1',
+          location: 'Location1',
+        } as unknown as Tweet,
+        {
+          id: '2',
+          createdAt: new Date('2024-01-03T00:00:00Z'),
+          updatedAt: new Date('2024-01-04T00:00:00Z'),
+          content: 'Tweet 2',
+          hashtags: [{ id: '2', name: '#hashtag2' } as Hashtag],
+          author: { id: '124' },
+          parentTweet: null,
+          category: 'Category2',
+          location: 'Location2',
+        } as unknown as Tweet,
+      ];
+
+      const hasNextPage = false;
+      jest
+        .spyOn(service, 'paginateTweets')
+        .mockResolvedValue({ nodes: mockTweets, hasNextPage });
+      // service.paginateTweets.mockResolvedValue({ nodes: mockTweets, hasNextPage });
+
+      const result: PaginatedTweets = await resolver.paginateTweets(123, 2, 1);
+
+      expect(result.nodes.length).toBe(2); // Ensure the correct number of tweets
+      expect(result.hasNextPage).toBe(false); // Ensure the pagination flag is set correctly
+
+      // Check that each Tweet is transformed into the correct DTO
+      expect(result.nodes[0].id).toBe('1');
+      expect(result.nodes[1].id).toBe('2');
+      expect(result.nodes[0].createTime).toBe(
+        mockTweets[0].createdAt.getTime(),
+      ); // Check if the timestamp is mapped correctly
+      expect(result.nodes[1].createTime).toBe(
+        mockTweets[1].createdAt.getTime(),
+      );
+    });
+
+    it('should return empty results if no tweets are found', async () => {
+      jest
+        .spyOn(service, 'paginateTweets')
+        .mockResolvedValue({ nodes: [], hasNextPage: false });
+
+      const result: PaginatedTweets = await resolver.paginateTweets(123, 5, 1);
+
+      expect(result.nodes.length).toBe(0); // No tweets should be returned
+      expect(result.hasNextPage).toBe(false); // No next page flag should be set
+    });
+
+    it('should return correct results for multiple pages', async () => {
+      const mockTweetsPage1 = [
+        {
+          id: '1',
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          content: 'Tweet 1',
+          hashtags: [{ id: '1', name: '#hashtag1' } as Hashtag],
+          author: { id: '123' },
+          parentTweet: null,
+          category: TweetCategory.Finance,
+          location: 'Location1',
+        } as unknown as Tweet,
+        {
+          id: '2',
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          content: 'Tweet 2',
+          hashtags: [{ id: '2', name: '#hashtag2' } as Hashtag],
+          author: { id: '124' },
+          parentTweet: null,
+          category: TweetCategory.News,
+          location: 'Location2',
+        } as unknown as Tweet,
+      ];
+      const mockTweetsPage2 = [
+        {
+          id: '3',
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          content: 'Tweet 3',
+          hashtags: [{ id: '3', name: '#hashtag3' } as Hashtag],
+          author: { id: '125' },
+          parentTweet: null,
+          category: TweetCategory.Sport,
+          location: 'Location3',
+        } as unknown as Tweet,
+        {
+          id: '4',
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          content: 'Tweet 4',
+          hashtags: [{ id: '4', name: '#hashtag4' } as Hashtag],
+          author: { id: '126' },
+          parentTweet: null,
+          category: TweetCategory.Tech,
+          location: 'Location4',
+        } as unknown as Tweet,
+      ];
+
+      // Mock responses for different pages
+      jest.spyOn(service, 'paginateTweets').mockResolvedValueOnce({
+        nodes: mockTweetsPage1,
+        hasNextPage: true,
+      });
+
+      jest.spyOn(service, 'paginateTweets').mockResolvedValueOnce({
+        nodes: mockTweetsPage2,
+        hasNextPage: false,
+      }); // Second page
+
+      const resultPage1: PaginatedTweets = await resolver.paginateTweets(
+        123,
+        2,
+        1,
+      );
+
+      const resultPage2: PaginatedTweets = await resolver.paginateTweets(
+        123,
+        2,
+        2,
+      );
+
+      // First page
+      expect(resultPage1.nodes.length).toBe(2);
+      expect(resultPage1.hasNextPage).toBe(true);
+
+      // Second page
+      expect(resultPage2.nodes.length).toBe(2);
+      expect(resultPage2.hasNextPage).toBe(false);
+    });
+
+    it('should map entity fields correctly in the response', async () => {
+      //INJA
+      const mockTweet = {
+        id: '123',
+        createdAt: new Date('2024-01-01T00:00:00Z'),
+        updatedAt: new Date('2024-01-02T00:00:00Z'),
+        content: 'This is a tweet',
+        hashtags: [{ id: '3', name: '#hashtag3' } as Hashtag],
+        author: { id: '456', name: 'Author' } as any,
+        parentTweet: null,
+        category: TweetCategory.Finance,
+        location: 'Location1',
+      } as unknown as Tweet;
+
+      const hasNextPage = false;
+      jest
+        .spyOn(service, 'paginateTweets')
+        .mockResolvedValue({ nodes: [mockTweet], hasNextPage });
+
+      const result: PaginatedTweets = await resolver.paginateTweets(123, 1, 1);
+
+      // Ensure the toGraphQLTweet function is invoked and result is mapped correctly
+      expect(result.nodes[0].id).toBe('123');
+      expect(result.nodes[0].createTime).toBe(mockTweet.createdAt.getTime());
+      expect(result.nodes[0].authorId).toBe('456');
+      expect(result.nodes[0].content).toBe('This is a tweet');
     });
   });
 
