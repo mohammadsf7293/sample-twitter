@@ -1,9 +1,11 @@
 import { Resolver, Query, Mutation, Args } from '@nestjs/graphql';
 import { TweetsService } from './tweets.service';
 import { Tweet } from './tweet.entity';
+import { Tweet as TweetDTO } from 'src/graphql.schema';
 import { CreateTweetDto } from './dto/create-tweet.dto';
 import { UpdateTweetDto } from './dto/update-tweet.dto';
 import { UpdateTweetPermissionsDto } from './dto/update-tweet-permissions.dto';
+import { PaginatedTweets } from '../graphql.schema';
 
 @Resolver(() => Tweet)
 export class TweetsResolver {
@@ -32,6 +34,22 @@ export class TweetsResolver {
     @Args('tweetId', { type: () => String }) tweetId: string,
   ): Promise<boolean> {
     return this.tweetsService.canEdit(userId, tweetId);
+  }
+
+  private toGraphQLTweet(tweetEntity: Tweet): TweetDTO {
+    return {
+      id: tweetEntity.id,
+      createTime: tweetEntity.createdAt.getTime(),
+      updateTime: tweetEntity.updatedAt.getTime(),
+      authorId: tweetEntity.author.id.toString(),
+      content: tweetEntity.content,
+      hashtags: tweetEntity.hashtags.map((hashtag) => hashtag.name) || [],
+      parentTweetId: tweetEntity.parentTweet
+        ? tweetEntity.parentTweet.id
+        : null,
+      category: tweetEntity.category,
+      location: tweetEntity.location,
+    };
   }
 
   @Mutation(() => Tweet)

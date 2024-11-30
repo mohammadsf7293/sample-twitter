@@ -12,6 +12,8 @@ type Query {
   
   # Checking editability of a tweet by a special userId
   canEditTweet(userId: Int!, tweetId: String!): Boolean!
+
+  paginateTweets(userId: Int!, limit: Int!, page: Int!): PaginatedTweets!
 }
 
 type Mutation {
@@ -27,22 +29,23 @@ type Mutation {
   updateTweetPermissions(id: ID!, input: UpdateTweetPermissions!): Boolean!
 }
 
-type Tweet {
-  id: ID!
-  content: String!
-  author: User!
-  hashtags: [Hashtag!]!
-  location: String
-  category: String
-  parentTweet: Tweet
-  childTweets: [Tweet!]!
-  createTime: Date!
-  updateTime: Date!
+enum TweetCategory {
+	Sport
+	Finance
+	Tech
+	News
 }
 
-type Hashtag {
-  id: ID!
-  name: String!
+type Tweet {
+  id: String!
+  content: String!
+  authorId: ID!
+  hashtags: [String!]!
+  location: String
+  category: TweetCategory
+  parentTweetId: String
+  createTime: Int!
+  updateTime: Int!
 }
 
 input CreateTweetInput {
@@ -52,6 +55,11 @@ input CreateTweetInput {
   location: String
   category: String
   parentTweetId: ID
+}
+
+type PaginatedTweets {
+  nodes: [Tweet!]!
+  hasNextPage: Boolean!
 }
 
 input UpdateTweetInput {

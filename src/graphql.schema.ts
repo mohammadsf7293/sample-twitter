@@ -8,6 +8,13 @@
 /* tslint:disable */
 /* eslint-disable */
 
+export enum TweetCategory {
+    Sport = "Sport",
+    Finance = "Finance",
+    Tech = "Tech",
+    News = "News"
+}
+
 export class CreateGroupInput {
     name?: Nullable<string>;
     userIds?: Nullable<string[]>;
@@ -56,6 +63,8 @@ export abstract class IQuery {
 
     abstract canEditTweet(userId: number, tweetId: string): boolean | Promise<boolean>;
 
+    abstract paginateTweets(userId: number, limit: number, page: number): PaginatedTweets | Promise<PaginatedTweets>;
+
     abstract users(): Nullable<Nullable<User>[]> | Promise<Nullable<Nullable<User>[]>>;
 
     abstract user(id: string): Nullable<User> | Promise<Nullable<User>>;
@@ -95,19 +104,18 @@ export abstract class ISubscription {
 export class Tweet {
     id: string;
     content: string;
-    author: User;
-    hashtags: Hashtag[];
+    authorId: string;
+    hashtags: string[];
     location?: Nullable<string>;
-    category?: Nullable<string>;
-    parentTweet?: Nullable<Tweet>;
-    childTweets: Tweet[];
-    createTime: Date;
-    updateTime: Date;
+    category?: Nullable<TweetCategory>;
+    parentTweetId?: Nullable<string>;
+    createTime: number;
+    updateTime: number;
 }
 
-export class Hashtag {
-    id: string;
-    name: string;
+export class PaginatedTweets {
+    nodes: Tweet[];
+    hasNextPage: boolean;
 }
 
 export class User {
