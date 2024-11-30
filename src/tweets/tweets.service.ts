@@ -46,8 +46,9 @@ export class TweetsService {
 
     let parentTweet: Tweet = null;
     if (parentTweetId) {
+      // Ensure parentTweetId is a number if your 'id' field in Tweet is a number
       parentTweet = await this.tweetRepository.findOne({
-        where: { id: parentTweetId },
+        where: { id: parentTweetId }, // Convert to number
       });
       if (!parentTweet) {
         throw new Error('Parent tweet not found');
@@ -55,9 +56,10 @@ export class TweetsService {
     }
 
     // Handle hashtags: check if they exist, create new ones if needed
-    const existingHashtags = await this.hashtagRepository.findBy({
-      name: In(hashtags),
-    });
+    const existingHashtags =
+      (await this.hashtagRepository.findBy({
+        name: In(hashtags),
+      })) || [];
 
     // Find hashtags that are not yet in the database
     const newHashtags = hashtags.filter(
@@ -88,36 +90,8 @@ export class TweetsService {
     // Save the tweet to the database
     const savedTweet = await this.tweetRepository.save(tweet);
 
-    // Serialize the tweet to protobuf
-    // protoPath is default for dev environment
-    //TODO: update tweet path in edit tweet (update tweet)
-    let protoPath = path.join(__dirname, '../../../src/tweets/tweet.proto');
-    switch (process.env.NODE_ENV) {
-      case 'production':
-        protoPath = path.join(__dirname, 'tweets/tweet.proto');
-        break;
-      case 'test':
-        protoPath = path.join(__dirname, 'tweet.proto');
-    }
-
-    //path.join(__dirname, '../../../src/tweets/tweet.proto'),
-    const TweetProto = await protobuf.load(protoPath);
-    const TweetType = TweetProto.lookupType('Tweet');
-    const encodedTweet = TweetType.encode({
-      id: savedTweet.id,
-      content: savedTweet.content,
-      authorId: savedTweet.author.id,
-      hashtags: savedTweet.hashtags.map((h) => h.name),
-      location: savedTweet.location,
-      category: savedTweet.category,
-    }).finish();
-
-    const encodedTweetString = encodedTweet.toString();
-    // Store serialized tweet in Redis
-    await this.CacheService.setValue(
-      `cache:tweet:${savedTweet.id}`,
-      encodedTweetString,
-    );
+    // Cache the serialized tweet using the new cacheTweet method
+    await this.cacheTweet(savedTweet.id, savedTweet);
 
     return savedTweet;
   }

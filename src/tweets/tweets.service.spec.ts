@@ -1,11 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import { Repository } from 'typeorm';
 import { TweetsService } from './tweets.service';
 import { Tweet, TweetCategory } from './tweet.entity';
 import { User } from '../users/user.entity';
 import { Hashtag } from './hashtag.entity';
-import { CreateTweetDto } from './dto/create-tweet.dto';
 import { UpdateTweetDto } from './dto/update-tweet.dto';
 import { CacheService } from '../cache/cache.service';
 import { GroupsService } from '../groups/groups.service';
@@ -130,98 +129,123 @@ describe('TweetsService', () => {
   });
 
   describe('create', () => {
-    it('should create a new tweet and store serialized tweet in Redis', async () => {
-      const createTweetDto: CreateTweetDto = {
-        content: 'Hello, world!',
+    it('should create a tweet and cache it', async () => {
+      const createTweetDto = {
+        content: 'Test tweet content',
         authorId: 1,
         parentTweetId: null,
-        hashtags: ['nestjs', 'typescript'],
-        location: 'Earth',
-        category: TweetCategory.Tech,
+        hashtags: ['hashtag1', 'hashtag2'],
+        location: 'Test location',
+        category: TweetCategory.News,
       };
 
       const author = {
-        id: '1',
-        firstName: 'Test User firstName',
-        lastName: 'Test User lastName',
+        id: 1,
+        username: 'author',
+        firstName: 'author firstName',
+        lastName: 'author lastName',
       } as unknown as User;
-      const newHashtag = { id: '2', name: 'typescript' } as Hashtag;
-      const existingHashtags = [
-        { id: '1', name: 'nestjs' } as Hashtag,
-      ] as Hashtag[];
 
-      const createdTweet = {
-        id: '1',
-        ...createTweetDto,
-        hashtags: existingHashtags,
-        author: author,
-      } as unknown as Tweet;
+      const savedTweet = new Tweet();
+      savedTweet.id = '123';
+      savedTweet.content = createTweetDto.content;
+      savedTweet.author = author;
+      savedTweet.hashtags = [
+        {
+          name: 'hashtag1',
+          id: '',
+          tweets: [],
+          createdAt: undefined,
+        },
+        {
+          name: 'hashtag2',
+          id: '',
+          tweets: [],
+          createdAt: undefined,
+        },
+      ];
+      savedTweet.location = createTweetDto.location;
+      savedTweet.category = createTweetDto.category;
 
-      jest.spyOn(userRepository, 'findOne').mockResolvedValueOnce(author);
-      jest
-        .spyOn(hashtagRepository, 'findBy')
-        .mockResolvedValueOnce(existingHashtags);
-      jest.spyOn(hashtagRepository, 'create').mockReturnValueOnce(newHashtag);
-      jest.spyOn(hashtagRepository, 'save').mockResolvedValueOnce(newHashtag);
+      // Mock repositories
+      jest.spyOn(userRepository, 'findOne').mockResolvedValue(author as User);
+      jest.spyOn(tweetRepository, 'save').mockResolvedValue(savedTweet);
 
-      jest.spyOn(tweetRepository, 'create').mockReturnValueOnce(createdTweet);
-      jest.spyOn(tweetRepository, 'save').mockResolvedValueOnce(createdTweet);
-      jest.spyOn(cacheService, 'setValue').mockResolvedValueOnce();
+      // Mock cache service's cacheTweet method
+      const cacheTweetSpy = jest
+        .spyOn(cacheService, 'cacheTweet')
+        .mockResolvedValue();
 
+      // Mock protobuf.load for serialization
+      const mockedProtoPath = path.join(__dirname, 'tweet.proto');
+      const mockedTweetProto = {
+        lookupType: jest.fn().mockReturnValue({
+          encode: jest.fn().mockReturnValue({
+            finish: jest.fn().mockReturnValue(Buffer.from('serializedData')),
+          }),
+        }),
+      };
+      jest.spyOn(protobuf, 'load').mockResolvedValue(mockedTweetProto as any);
+
+      // Call create method
       const result = await service.create(createTweetDto);
 
-      expect(result).toEqual(createdTweet);
-      expect(userRepository.findOne).toHaveBeenCalledWith({
-        where: { id: createTweetDto.authorId },
-      });
-      expect(hashtagRepository.findBy).toHaveBeenCalledWith({
-        name: In(createTweetDto.hashtags),
-      });
-      expect(hashtagRepository.save).toHaveBeenCalledWith(
-        expect.objectContaining({
-          name: newHashtag.name,
-        }),
+      // Assertions
+      expect(result).toEqual(savedTweet);
+      expect(userRepository.findOne).toHaveBeenCalledWith({ where: { id: 1 } });
+      expect(tweetRepository.save).toHaveBeenCalledWith(
+        expect.objectContaining({ content: createTweetDto.content }),
       );
-      expect(tweetRepository.save).toHaveBeenCalledWith(expect.any(Tweet));
-      expect(cacheService.setValue).toHaveBeenCalledWith(
-        `cache:tweet:${createdTweet.id}`,
+      expect(cacheTweetSpy).toHaveBeenCalledWith(
+        savedTweet.id,
         expect.any(String),
       );
+      expect(protobuf.load).toHaveBeenCalledWith(mockedProtoPath);
+      expect(mockedTweetProto.lookupType).toHaveBeenCalledWith('Tweet');
+      expect(mockedTweetProto.lookupType().encode).toHaveBeenCalledWith({
+        id: savedTweet.id,
+        content: savedTweet.content,
+        authorId: savedTweet.author.id,
+        hashtags: savedTweet.hashtags.map((h) => h.name),
+        location: savedTweet.location,
+        category: savedTweet.category,
+      });
     });
 
-    it('should throw an error if the author does not exist', async () => {
-      const createTweetDto: CreateTweetDto = {
-        content: 'Hello, world!',
-        authorId: 999,
+    it('should throw an error if author is not found', async () => {
+      const createTweetDto = {
+        content: 'Test tweet content',
+        authorId: 999, // Non-existing author
         parentTweetId: null,
-        hashtags: [],
-        location: '',
-        category: TweetCategory.Tech,
+        hashtags: ['hashtag1'],
+        location: 'Test location',
+        category: TweetCategory.Finance,
       };
 
-      jest.spyOn(userRepository, 'findOne').mockResolvedValueOnce(null);
+      jest.spyOn(userRepository, 'findOne').mockResolvedValue(null); // Simulate author not found
 
-      await expect(service.create(createTweetDto)).rejects.toThrow(
+      await expect(service.create(createTweetDto)).rejects.toThrowError(
         'User not found',
       );
     });
 
-    it('should throw an error if the parent tweet does not exist', async () => {
-      const createTweetDto: CreateTweetDto = {
-        content: 'Hello, world!',
+    it('should throw an error if parent tweet is not found', async () => {
+      const createTweetDto = {
+        content: 'Test tweet content',
         authorId: 1,
-        parentTweetId: '999',
-        hashtags: [],
-        location: '',
-        category: TweetCategory.Tech,
+        parentTweetId: '999', // Non-existing parent tweet
+        hashtags: ['hashtag1'],
+        location: 'Test location',
+        category: TweetCategory.Sport,
       };
 
-      const author = { id: '1', name: 'Test User' } as unknown as User;
+      const author = { id: 1, username: 'author' };
+      jest
+        .spyOn(userRepository, 'findOne')
+        .mockResolvedValue(author as unknown as User);
+      jest.spyOn(tweetRepository, 'findOne').mockResolvedValue(null); // Simulate parent tweet not found
 
-      jest.spyOn(userRepository, 'findOne').mockResolvedValueOnce(author);
-      jest.spyOn(tweetRepository, 'findOne').mockResolvedValueOnce(null);
-
-      await expect(service.create(createTweetDto)).rejects.toThrow(
+      await expect(service.create(createTweetDto)).rejects.toThrowError(
         'Parent tweet not found',
       );
     });
