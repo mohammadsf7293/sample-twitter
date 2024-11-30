@@ -91,12 +91,12 @@ export class TweetsService {
     const savedTweet = await this.tweetRepository.save(tweet);
 
     // Cache the serialized tweet using the new cacheTweet method
-    await this.cacheTweet(savedTweet.id, savedTweet);
+    await this.cacheTweet(savedTweet);
 
     return savedTweet;
   }
 
-  async cacheTweet(tweetId: string, tweet: Tweet): Promise<void> {
+  async cacheTweet(tweet: Tweet): Promise<void> {
     // Serialize the tweet to protobuf
     let protoPath = path.join(__dirname, '../../../src/tweets/tweet.proto');
     switch (process.env.NODE_ENV) {
@@ -122,7 +122,7 @@ export class TweetsService {
     const encodedTweetString = encodedTweet.toString();
 
     // Store serialized tweet in Redis using CacheService's cacheTweet method
-    await this.CacheService.cacheTweet(tweetId, encodedTweetString);
+    await this.CacheService.cacheTweet(tweet.id, encodedTweetString);
   }
 
   findAll(): Promise<Tweet[]> {
@@ -190,7 +190,7 @@ export class TweetsService {
     const updatedTweet = await this.tweetRepository.save(tweet);
 
     // Instead of manually serializing, use the cacheTweet method
-    await this.cacheTweet(updatedTweet.id, updatedTweet); // Use the cacheTweet method to handle caching
+    await this.cacheTweet(updatedTweet); // Use the cacheTweet method to handle caching
 
     // Return the updated tweet entity
     return updatedTweet;

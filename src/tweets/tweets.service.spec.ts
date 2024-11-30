@@ -282,7 +282,7 @@ describe('TweetsService', () => {
       const cacheTweetSpy = jest.spyOn(cacheService, 'cacheTweet');
 
       // Call the cacheTweet method
-      await service.cacheTweet(tweetId, tweet);
+      await service.cacheTweet(tweet);
 
       // Assertions
       expect(protobuf.load).toHaveBeenCalledWith(mockedProtoPath);
