@@ -552,8 +552,8 @@ describe('CacheService', () => {
       ]);
       expect(mockRedisClient.zrevrangebyscore).toHaveBeenCalledWith(
         CacheKeys.PUBLIC_VIEWABLE_TWEETS_ZSET,
-        100,
         200,
+        100,
         'WITHSCORES',
         'LIMIT',
         0,
@@ -569,8 +569,8 @@ describe('CacheService', () => {
       expect(result).toEqual([]);
       expect(mockRedisClient.zrevrangebyscore).toHaveBeenCalledWith(
         CacheKeys.PUBLIC_VIEWABLE_TWEETS_ZSET,
-        100,
         200,
+        100,
         'WITHSCORES',
         'LIMIT',
         0,
@@ -588,8 +588,8 @@ describe('CacheService', () => {
       ).rejects.toThrow('Could not find items from Zset');
       expect(mockRedisClient.zrevrangebyscore).toHaveBeenCalledWith(
         CacheKeys.PUBLIC_VIEWABLE_TWEETS_ZSET,
-        100,
         200,
+        100,
         'WITHSCORES',
         'LIMIT',
         0,
@@ -640,8 +640,8 @@ describe('CacheService', () => {
       ]);
       expect(mockRedisClient.zrevrangebyscore).toHaveBeenCalledWith(
         `${CacheKeys.PRIVATE_GROUP_VIEWABLE_TWEETS_ZSET_PREFIX}${groupId.toString()}`,
-        100,
         200,
+        100,
         'WITHSCORES',
         'LIMIT',
         0,
@@ -664,8 +664,8 @@ describe('CacheService', () => {
       expect(result).toEqual([]);
       expect(mockRedisClient.zrevrangebyscore).toHaveBeenCalledWith(
         `${CacheKeys.PRIVATE_GROUP_VIEWABLE_TWEETS_ZSET_PREFIX}${groupId.toString()}`,
-        100,
         200,
+        100,
         'WITHSCORES',
         'LIMIT',
         0,
@@ -684,8 +684,8 @@ describe('CacheService', () => {
       ).rejects.toThrow('Could not find items from Zset');
       expect(mockRedisClient.zrevrangebyscore).toHaveBeenCalledWith(
         `${CacheKeys.PRIVATE_GROUP_VIEWABLE_TWEETS_ZSET_PREFIX}${groupId.toString()}`,
-        100,
         200,
+        100,
         'WITHSCORES',
         'LIMIT',
         0,
