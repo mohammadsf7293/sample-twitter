@@ -39,6 +39,8 @@ The newly created group's ID is then assigned to the tweet's permissions. This a
 
 - Thirdly, I've updated the design of the `UpdateTweetPermissions` method's inputs in the GraphQL schema to receive `groupIDs` and `userIDs` as separate arrays. This change was made because there was no specific rule defined to differentiate between a `userID` and a `groupID` when they were combined in a single array.
 
+- I have converted `Date` types to timestamps to eliminate the need to format dates for different timezones. This is because a timestamp doesn't have a timezone, and on the frontend side, it can be converted to a string based on the user's timezone.
+
 ### Future Enhancements
 
 In the future, the list of user-created groups can be displayed in the UI to avoid repeatedly creating groups with the same users or items. Additionally, server-side logic can be implemented to detect and prevent the creation of duplicate groups. If a user attempts to create a group with identical members to an existing one, the system could
@@ -48,7 +50,7 @@ In the future, the list of user-created groups can be displayed in the UI to avo
 <p align="center">
  <img src="https://ipfs.io/ipfs/Qmd1xhbQ694WtUvtB56K2HDXCE3jqeHJQQ1f42ic2Z91ax" style="width:45vw;" alt="Cache Architecture" />
 </p>
-I have used this caching design in the *Quiz of Kings* game, and it worked smoothly with over 30 million users and nearly 1 million daily active users.
+I have used this caching design in the `Quiz of Kings` game, and it worked smoothly with over 30 million users and nearly 1 million daily active users.
 
 ### Redis Cache
 - **Structure**:
@@ -131,6 +133,9 @@ To further enhance the system's scalability and performance, the following impro
 - **Use UUID in every where**: In certain entities, such as `User` and `Group`, I have used integer IDs for simplicity. However, in a production environment, using **Universally Unique Identifiers (UUIDs)** is a better practice for ensuring greater uniqueness and scalability.
 - **Decoupling Modules**: As seen here, due to the use of **Nest ORM** (TypeORM), even though we have separate modules such as `User`, `Group`, and `Tweet`, the relational nature of the data leads to some degree of coupling between these modules. This is because relationships must be defined within the ORM entities. This coupling can become problematic, especially in scenarios where you might want to use a different database (e.g., MongoDB) for the `User` module. Such tight coupling can make future changes more cumbersome and harder to manage.
 - **Implementing Error Codes**: An essential improvement is to define distinct error codes for logical errors and internal errors, ensuring better error handling and debugging. Additionally, enhancing logging capabilities for internal processes is crucial. Leveraging **NestJS Exception Filters** can streamline error management and improve the overall system robustness.
+- - **Using key caches to prevent hot key problem in Redis**: If a tweet becomes so popular that it is being fetched hundreds of times per second, Redis may face a <a target="_blank" href="https://abhivendrasingh.medium.com/understanding-and-solving-hotkey-and-bigkey-and-issues-in-redis-1198f98b17a5#:~:text=Problems%20caused%20by%20HotKey&text=This%20can%20lead%20to%20slower,memory%20usage%20and%20reduced%20performance.">"Hot Key" problem</a>, as each key is stored in a specific node. This can result in high pressure on certain Redis nodes. To prevent this issue, we can log the access rate of each key in a map on the application servers (a map of the 1000 most recently hot keys). For these keys, we can also cache their content in the RAM of each application server, helping to overcome the Redis hot key problem.
+- **Prevention of creating repetitious hashtags**: In cases where a new hashtag becomes very popular, if two users use it and publish their tweets at the same time, it may result in the creation of duplicate hashtags. To prevent this, we could use distributed locks such as Redis locks or even MySQL locks.
+
 
 ### Setup Instructions
 
