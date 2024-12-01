@@ -40,7 +40,9 @@ const mockCacheService = {
   cacheTweet: jest.fn(),
   getCachedTweet: jest.fn(),
   addPublicViewableTweetToZSet: jest.fn(),
+  paginatePublicTweetIds: jest.fn(),
   addPrivateViewableTweetToZSet: jest.fn(),
+  paginatePrivateTweetIds: jest.fn(),
   setTweetIsPublicEditable: jest.fn(),
   getTweetIsPublicEditable: jest.fn(),
   setTweetIsEditableByGroup: jest.fn(),
@@ -55,6 +57,7 @@ const mockGroupsService = {
 
 const mockUsersService = {
   isUserInGroupIds: jest.fn(),
+  findOneWithRelations: jest.fn(),
 };
 
 const mockTweet = {
@@ -391,6 +394,51 @@ describe('TweetsService', () => {
         'Could not retrieve cached tweet: Cache retrieval error',
       );
       expect(cacheService.getCachedTweet).toHaveBeenCalledWith('123');
+    });
+  });
+
+  describe('paginateTweets', () => {
+    it('should throw an error if the user is not found', async () => {
+      jest
+        .spyOn(mockUsersService, 'findOneWithRelations')
+        .mockResolvedValue(null);
+
+      await expect(service.paginateTweets(123, 10, 1)).rejects.toThrowError(
+        'User not found',
+      );
+    });
+
+    it('should return paginated tweets successfully', async () => {
+      jest
+        .spyOn(mockUsersService, 'findOneWithRelations')
+        .mockResolvedValue(mockUser);
+
+      jest
+        .spyOn(mockCacheService, 'paginatePublicTweetIds')
+        .mockResolvedValue([{ score: 1000, item: 'tweet_1' }]);
+
+      jest
+        .spyOn(mockCacheService, 'paginatePrivateTweetIds')
+        .mockResolvedValue([{ score: 900, item: 'tweet_2' }]);
+
+      jest
+        .spyOn(mockCacheService, 'getCachedTweet')
+        .mockResolvedValueOnce(mockTweet)
+        .mockResolvedValueOnce(null); // Simulate a missing cached tweet
+
+      const result = await service.paginateTweets(1, 2, 1);
+
+      expect(result).toEqual({
+        nodes: [mockTweet],
+        hasNextPage: false,
+      });
+
+      expect(mockUsersService.findOneWithRelations).toHaveBeenCalledWith(1, [
+        'groups',
+      ]);
+      expect(mockCacheService.paginatePublicTweetIds).toHaveBeenCalled();
+      expect(mockCacheService.paginatePrivateTweetIds).toHaveBeenCalled();
+      expect(mockCacheService.getCachedTweet).toHaveBeenCalledTimes(2);
     });
   });
 

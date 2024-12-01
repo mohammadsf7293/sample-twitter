@@ -26,7 +26,7 @@ type Mutation {
   # Remove a tweet
   removeTweet(id: ID!): Boolean!
 
-  updateTweetPermissions(id: ID!, input: UpdateTweetPermissions!): Boolean!
+  updateTweetPermissions(id: ID!, userId: ID!, input: UpdateTweetPermissions!): Boolean!
 }
 
 enum TweetCategory {
@@ -69,8 +69,33 @@ input UpdateTweetInput {
 }
 
 input UpdateTweetPermissions {
+  """
+  Whether the tweet inherits view permissions from its parent.
+  """
   inheritViewPermissions: Boolean!
+
+  """
+  Whether the tweet inherits edit permissions from its parent.
+  """
   inheritEditPermissions: Boolean!
-  viewPermissions: [String!]!
-  editPermissions: [String!]!
+
+  """
+  A list of user IDs that have view permissions for the tweet.
+  """
+  viewPermissionsUserIds: [Int!]!
+
+  """
+  A list of group IDs that have view permissions for the tweet.
+  """
+  viewPermissionsGroupIds: [Int!]!
+
+  """
+  A list of user IDs that have edit permissions for the tweet.
+  """
+  editPermissionsUserIds: [Int!]!
+
+  """
+  A list of group IDs that have edit permissions for the tweet.
+  """
+  editPermissionsGroupIds: [Int!]!
 }

@@ -103,12 +103,12 @@ export class TweetsResolver {
   async updateTweetPermissions(
     @Args('id', { type: () => String }) id: string, // Tweet ID
     @Args('input') updatePermissionsDto: UpdateTweetPermissionsDto, // Permissions DTO
-    @Args('authorId', { type: () => Number }) authorId: number, // Author ID
+    @Args('userId', { type: () => Number }) userId: number,
   ): Promise<boolean> {
     await this.tweetsService.updateTweetPermissions(
       id,
       updatePermissionsDto,
-      authorId,
+      userId,
     );
     return true;
   }

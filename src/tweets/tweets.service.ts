@@ -195,7 +195,7 @@ export class TweetsService {
     // These parameters could also be added to GraphQL params if needed
     //toStamp is timestamp to which tweets must be fetched
     const toStamp = nowStamp;
-    //fromStamp is timestmap from which tweets must be fetched
+    //fromStamp is timestamp from which tweets must be fetched
     const fromStamp = nowStamp - 7 * 86400;
 
     // Fetch tweet IDs (public + private for the user)
@@ -435,7 +435,7 @@ export class TweetsService {
   async updateTweetPermissions(
     tweetId: string,
     updatePermissionsDto: UpdateTweetPermissionsDto,
-    authorId: number,
+    userId: number,
   ): Promise<Tweet> {
     const {
       viewPermissionsUserIds,
@@ -449,21 +449,28 @@ export class TweetsService {
     // Fetch the tweet
     const tweet = await this.tweetRepository.findOne({
       where: { id: tweetId },
-      relations: ['author', 'viewableGroups', 'editableGroups', 'parentTweet'],
+      relations: [
+        'author',
+        'viewableGroups',
+        'editableGroups',
+        'parentTweet',
+        'hashtags',
+      ],
     });
 
     if (!tweet) {
       throw new Error('Tweet not found');
     }
 
-    if (tweet.author.id !== authorId) {
+    if (tweet.author.id != userId) {
+      console.log(
+        `Illegal access for updating tweet, userId: ${userId}, authorId: ${tweet.author.id}`,
+      );
       throw new Error('You are not the author of this tweet');
     }
 
     let publicViewableTweet = false;
     let publicEditableTweet = false;
-    let viewableGroupsToBeSet: Group[] = [];
-    let editableGroupsToBeSet: Group[] = [];
 
     tweet.inheritViewPermissions = inheritViewPermissions;
     const tweetViewPermissions = await this.determineTweetVisibility(
@@ -483,10 +490,9 @@ export class TweetsService {
         const groupsToBeSet = await this.assignGroupsToUsers(
           allowedUserIDs,
           allowedGroupIDs,
-          authorId,
+          tweet.author.id,
         );
         tweet.viewableGroups = groupsToBeSet;
-        viewableGroupsToBeSet = groupsToBeSet;
       }
     }
 
@@ -508,10 +514,9 @@ export class TweetsService {
         const groupsToBeSet = await this.assignGroupsToUsers(
           allowedUserIDs,
           allowedGroupIDs,
-          authorId,
+          tweet.author.id,
         );
         tweet.editableGroups = groupsToBeSet;
-        editableGroupsToBeSet = groupsToBeSet;
       }
     }
     // Save updated tweet permissions
@@ -526,7 +531,7 @@ export class TweetsService {
         updatedTweet.createdAt.getTime(),
       );
     } else {
-      viewableGroupsToBeSet.forEach((group) => {
+      updatedTweet.viewableGroups.forEach((group) => {
         this.CacheService.addPrivateViewableTweetToZSet(
           group.id,
           updatedTweet.id,
@@ -541,7 +546,7 @@ export class TweetsService {
     if (publicEditableTweet) {
       this.CacheService.setTweetIsPublicEditable(updatedTweet.id);
     } else {
-      editableGroupsToBeSet.forEach((group) => {
+      updatedTweet.editableGroups.forEach((group) => {
         this.CacheService.setTweetIsEditableByGroup(updatedTweet.id, group.id);
       });
     }
@@ -588,8 +593,16 @@ export class TweetsService {
     // Find groups by the provided group IDs (explicitly given by the author)
     const existingGroups = await this.groupsService.findGroupsByIds(groupIds);
 
-    // Combine the user groups and the explicitly provided groups and ensure there are no duplicates
-    groupsToAssign = [...new Set([...validUserGroups, ...existingGroups])];
+    // Combine the user groups and the explicitly provided groups
+    const mergedGroups = [...validUserGroups, ...existingGroups];
+
+    // Ensure there are no duplicates by 'id'
+    groupsToAssign = mergedGroups.reduce((acc, group) => {
+      if (!acc.some((g) => g.id === group.id)) {
+        acc.push(group);
+      }
+      return acc;
+    }, []);
 
     return groupsToAssign;
   }
