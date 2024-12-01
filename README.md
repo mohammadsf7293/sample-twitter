@@ -172,6 +172,22 @@ If you make any changes to the `*.graphql` files in any module, you will need to
 yarn generate:typings
 ```
 ## Sample GraphQL Queries to Simplify Your Testing
+### Creating User
+```
+mutation {
+  createUser(createUserInput: {
+    userName: "john_doe"
+    firstName: "John"
+    lastName: "Doe"
+  }) {
+    id
+    userName
+    firstName
+    lastName
+  }
+}
+```
+
 ### Creating Tweet
 ```
 mutation {
@@ -188,6 +204,34 @@ mutation {
     hashtags
     location
     category
+  }
+}
+```
+### Creating group
+```
+mutation {
+  createGroup(createGroupInput: {
+    name: "New Group"
+    userIds: [1, 2, 3]
+    parentGroupId: 1
+    creatorId: 1
+  }) {
+    id
+    name
+    users {
+      id
+      userName
+    }
+    parentGroup {
+      id
+      name
+    }
+    creator {
+      id
+      userName
+    }
+    createdAt
+    updatedAt
   }
 }
 ```
