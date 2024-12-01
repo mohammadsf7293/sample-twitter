@@ -76,10 +76,11 @@ export class TweetsResolver {
   }
 
   @Mutation(() => Tweet)
-  createTweet(
+  async createTweet(
     @Args('createTweetInput') createTweetDto: CreateTweetDto,
-  ): Promise<Tweet> {
-    return this.tweetsService.create(createTweetDto);
+  ): Promise<TweetDTO> {
+    const createdTweet = await this.tweetsService.create(createTweetDto);
+    return this.toGraphQLTweet(createdTweet);
   }
 
   @Mutation(() => Tweet)
