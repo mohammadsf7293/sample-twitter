@@ -171,8 +171,8 @@ If you make any changes to the `*.graphql` files in any module, you will need to
 ```bash
 yarn generate:typings
 ```
-# Sample GraphQL Queries to Simplify Your Testing
-## Creating Tweet
+## Sample GraphQL Queries to Simplify Your Testing
+### Creating Tweet
 ```
 mutation {
   createTweet(createTweetInput: {
@@ -192,7 +192,7 @@ mutation {
 }
 ```
 
-## Updating Tweet permissions
+### Updating Tweet permissions
 ```
 mutation UpdateTweetPermissions {
   updateTweetPermissions(
@@ -209,7 +209,7 @@ mutation UpdateTweetPermissions {
   )
 }
 ```
-## Can Edit
+### Can Edit
 ```
 query CanEdit {
   canEditTweet(
@@ -219,7 +219,7 @@ query CanEdit {
 }
 ```
 
-## Paginate Tweets
+### Paginate Tweets
 ```
 query PaginateTweets {
   paginateTweets(userId: 1, limit: 10, page: 0) {
