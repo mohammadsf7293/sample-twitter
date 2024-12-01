@@ -2,27 +2,20 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { Tweet } from './tweet.entity';
-import { User } from '../users/user.entity';
 import { Hashtag } from './hashtag.entity';
 import { CreateTweetDto } from './dto/create-tweet.dto';
 import { UpdateTweetDto } from './dto/update-tweet.dto';
 import { CacheService } from '../cache/cache.service';
-import * as protobuf from 'protobufjs';
-import * as path from 'path';
 import { Group } from '../groups/group.entity';
 import { GroupsService } from '../groups/groups.service';
 import { UpdateTweetPermissionsDto } from './dto/update-tweet-permissions.dto';
 import { UsersService } from '../users/users.service';
-import { off } from 'process';
 
 @Injectable()
 export class TweetsService {
   constructor(
     @InjectRepository(Tweet)
     private readonly tweetRepository: Repository<Tweet>,
-
-    @InjectRepository(User)
-    private readonly userRepository: Repository<User>,
 
     @InjectRepository(Hashtag)
     private readonly hashtagRepository: Repository<Hashtag>,
@@ -38,9 +31,7 @@ export class TweetsService {
     const { content, authorId, parentTweetId, hashtags, location, category } =
       createTweetDto;
 
-    const author = await this.userRepository.findOne({
-      where: { id: authorId },
-    });
+    const author = await this.usersService.findOne(authorId);
     if (!author) {
       throw new Error('User not found');
     }

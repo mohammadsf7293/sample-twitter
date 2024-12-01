@@ -66,7 +66,7 @@ export class TweetsResolver {
       updateTime: Math.round(tweetEntity.updatedAt.getTime() / 1000),
       authorId: tweetEntity.author.id.toString(),
       content: tweetEntity.content,
-      hashtags: tweetEntity.hashtags.map((hashtag) => hashtag.toString()),
+      hashtags: tweetEntity.hashtags.map((hashtag) => hashtag.name),
       parentTweetId: tweetEntity.parentTweet
         ? tweetEntity.parentTweet.id
         : null,

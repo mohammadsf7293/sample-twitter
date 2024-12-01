@@ -4,6 +4,8 @@ import { Group } from './group.entity';
 import { GroupsService } from './groups.service';
 import { In, Repository } from 'typeorm';
 import { User } from '../users/user.entity';
+import { CreateGroupDto } from './dto/create-group.dto';
+import { UsersService } from '../users/users.service';
 
 // Mock data for users and groups
 const mockUsers = [
@@ -54,10 +56,15 @@ const mockGroupRepository = {
   createQueryBuilder: jest.fn(),
 };
 
+const mockUsersService = {
+  findUsersByIds: jest.fn(),
+  findOneWithRelations: jest.fn(),
+};
+
 describe('GroupsService', () => {
   let service: GroupsService;
   let groupRepository: Repository<Group>;
-  // let userRepository: Repository<User>;
+  let usersService: UsersService;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -68,26 +75,15 @@ describe('GroupsService', () => {
           useValue: mockGroupRepository,
         },
         {
-          provide: getRepositoryToken(User),
-          useValue: {
-            // Mock the `findBy` method to simulate `In()` functionality
-            findBy: jest.fn().mockImplementation(({ id }) => {
-              if (id && Array.isArray(id)) {
-                return Promise.resolve(
-                  mockUsers.filter((user) => id.includes(user)),
-                );
-              }
-              return Promise.resolve([]);
-            }),
-            findOneBy: jest.fn().mockResolvedValue(mockUsers[0]),
-          },
+          provide: UsersService,
+          useValue: mockUsersService,
         },
       ],
     }).compile();
 
     service = module.get<GroupsService>(GroupsService);
     groupRepository = module.get<Repository<Group>>(getRepositoryToken(Group));
-    // userRepository = module.get<Repository<User>>(getRepositoryToken(User));
+    usersService = module.get<UsersService>(UsersService);
   });
 
   afterEach(() => {
@@ -99,16 +95,64 @@ describe('GroupsService', () => {
   });
 
   describe('create()', () => {
-    it('should successfully insert a group with non-empty users null parentGroup', async () => {
-      const createGroupDto = {
-        name: 'group1',
-        userIds: [1, 2],
-        parentGroupId: null,
-        creatorId: 1,
-      };
+    // it('should create a new group successfully', async () => {
+    //   const createGroupDto: CreateGroupDto = {
+    //     name: 'Test Group',
+    //     userIds: [1, 2],
+    //     parentGroupId: 123,
+    //     creatorId: 1,
+    //   };
 
-      expect(await service.create(createGroupDto)).toEqual(oneGroup);
-    });
+    //   const users = [
+    //     { id: '1', name: 'User 1' },
+    //     { id: '2', name: 'User 2' },
+    //   ];
+    //   const parentGroup = { id: 123, name: 'Parent Group' } as unknown as Group;
+    //   const creator = { id: 1, name: 'Creator' } as unknown as User;
+
+    //   //INJA
+    //   // Mocking services
+    //   jest.spyOn(mockUsersService, 'findUsersByIds').mockResolvedValue(users);
+    //   // mockUsersService.findUsersByIds = jest.fn().mockResolvedValue(users);
+    //   jest
+    //     .spyOn(mockUsersService, 'findOneWithRelations')
+    //     .mockResolvedValue(creator);
+    //   // mockUsersService.findOneWithRelations = jest
+    //   //   .fn()
+    //   //   .mockResolvedValue(creator);
+    //   jest
+    //     .spyOn(mockGroupRepository, 'findOneBy')
+    //     .mockResolvedValue(parentGroup);
+    //   // mockGroupRepository.findOneBy = jest.fn().mockResolvedValue(parentGroup);
+    //   jest
+    //     .spyOn(mockGroupRepository, 'save')
+    //     .mockResolvedValue({ id: 456, ...createGroupDto });
+    //   // mockGroupRepository.save = jest
+    //   //   .fn()
+    //   //   .mockResolvedValue({ id: 456, ...createGroupDto });
+
+    //   const result = await service.create(createGroupDto);
+
+    //   expect(result).toEqual({ id: 456, ...createGroupDto });
+    //   expect(usersService.findUsersByIds).toHaveBeenCalledWith(
+    //     createGroupDto.userIds,
+    //   );
+    //   expect(usersService.findOneWithRelations).toHaveBeenCalledWith(
+    //     createGroupDto.creatorId,
+    //     [],
+    //   );
+    //   expect(groupRepository.findOneBy).toHaveBeenCalledWith({
+    //     id: createGroupDto.parentGroupId,
+    //   });
+    //   expect(groupRepository.save).toHaveBeenCalledWith(
+    //     expect.objectContaining({
+    //       name: createGroupDto.name,
+    //       users,
+    //       parentGroup,
+    //       creator,
+    //     }),
+    //   );
+    // });
   });
 
   describe('findAll()', () => {

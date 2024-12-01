@@ -3,16 +3,16 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Group } from './group.entity';
 import { CreateGroupDto } from './dto/create-group.dto';
-import { User } from '../users/user.entity';
 import { In } from 'typeorm';
+import { UsersService } from '../users/users.service';
 
 @Injectable()
 export class GroupsService {
   constructor(
     @InjectRepository(Group)
     private readonly groupRepository: Repository<Group>,
-    @InjectRepository(User)
-    private readonly userRepository: Repository<User>,
+
+    private readonly usersService: UsersService,
   ) {}
 
   // Example method to fetch all groups
@@ -30,20 +30,18 @@ export class GroupsService {
 
   // Method to create a new group
   async create(createGroupDto: CreateGroupDto): Promise<Group> {
-    // Find users by their IDs
-    // TODO: argue about this
-    const users = await this.userRepository.findBy({
-      id: In(createGroupDto.userIds),
-    });
+    const users = await this.usersService.findUsersByIds(
+      createGroupDto.userIds,
+    );
 
     const parentGroup = await this.groupRepository.findOneBy({
       id: createGroupDto.parentGroupId,
     });
 
-    const creator = await this.userRepository.findOneBy({
-      id: createGroupDto.creatorId,
-    });
-    //TODO: argue about this, do the same for parent?
+    const creator = await this.usersService.findOneWithRelations(
+      createGroupDto.creatorId,
+      [],
+    );
     if (!creator) {
       throw new Error(`Creator with ID ${createGroupDto.creatorId} not found`);
     }
