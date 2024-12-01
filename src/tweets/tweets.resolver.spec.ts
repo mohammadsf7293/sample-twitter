@@ -78,19 +78,45 @@ describe('TweetsResolver', () => {
   });
 
   describe('createTweet', () => {
-    it('should create a new tweet', async () => {
-      const createTweetDto: CreateTweetDto = {
-        content: 'Hello, world!',
+    it('should create a tweet and return the GraphQL tweet object', async () => {
+      const createTweetInput = {
+        content: 'This is a test tweet',
         authorId: 1,
-        hashtags: ['nestjs'],
-        location: 'Earth',
-        category: TweetCategory.Tech,
+        hashtags: ['#test', '#tweet'],
         parentTweetId: null,
+        category: TweetCategory.News,
+        location: 'Earth',
       };
 
-      const result = await resolver.createTweet(createTweetDto);
-      expect(result).toEqual(mockTweet);
-      expect(service.create).toHaveBeenCalledWith(createTweetDto);
+      const createdTweetEntity = {
+        id: 1,
+        content: createTweetInput.content,
+        author: { id: createTweetInput.authorId },
+        hashtags: [],
+        parentTweet: null,
+        category: createTweetInput.category,
+        location: createTweetInput.location,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      } as unknown as Tweet;
+
+      jest.spyOn(service, 'create').mockResolvedValue(createdTweetEntity);
+
+      const result = await resolver.createTweet(createTweetInput);
+
+      expect(result).toEqual({
+        id: createdTweetEntity.id,
+        content: createdTweetEntity.content,
+        authorId: createdTweetEntity.author.id.toString(),
+        hashtags: [],
+        parentTweetId: null,
+        category: createdTweetEntity.category,
+        location: createdTweetEntity.location,
+        createTime: createdTweetEntity.createdAt.getTime(),
+        updateTime: createdTweetEntity.updatedAt.getTime(),
+      });
+
+      expect(service.create).toHaveBeenCalledWith(createTweetInput);
     });
   });
 
@@ -322,7 +348,6 @@ describe('TweetsResolver', () => {
     });
 
     it('should map entity fields correctly in the response', async () => {
-      //INJA
       const mockTweet = {
         id: '123',
         createdAt: new Date('2024-01-01T00:00:00Z'),
