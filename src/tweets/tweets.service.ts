@@ -13,6 +13,7 @@ import { Group } from '../groups/group.entity';
 import { GroupsService } from '../groups/groups.service';
 import { UpdateTweetPermissionsDto } from './dto/update-tweet-permissions.dto';
 import { UsersService } from '../users/users.service';
+import { off } from 'process';
 
 @Injectable()
 export class TweetsService {
@@ -97,29 +98,20 @@ export class TweetsService {
   }
 
   async cacheTweet(tweet: Tweet): Promise<void> {
-    // Serialize the tweet to protobuf
-    let protoPath = path.join(__dirname, '../../../src/tweets/tweet.proto');
-    switch (process.env.NODE_ENV) {
-      case 'production':
-        protoPath = path.join(__dirname, 'tweets/tweet.proto');
-        break;
-      case 'test':
-        protoPath = path.join(__dirname, 'tweet.proto');
-    }
-
-    const TweetProto = await protobuf.load(protoPath);
-    const TweetType = TweetProto.lookupType('Tweet');
-
-    const encodedTweet = TweetType.encode({
+    // Only serialize the necessary fields, creating a simplified version of the Tweet
+    const tweetData = {
       id: tweet.id,
       content: tweet.content,
-      authorId: tweet.author.id,
-      hashtags: tweet.hashtags.map((h) => h.name),
-      location: tweet.location,
+      authorId: tweet.author,
       category: tweet.category,
-    }).finish();
+      hashtags: tweet.hashtags,
+      location: tweet.location,
+      createdAt: tweet.createdAt.getTime(),
+      updatedAt: tweet.updatedAt.getTime(),
+    };
 
-    const encodedTweetString = encodedTweet.toString();
+    // Serialize the object to JSON
+    const encodedTweetString = JSON.stringify(tweetData);
 
     // Store serialized tweet in Redis using CacheService's cacheTweet method
     await this.CacheService.cacheTweet(tweet.id, encodedTweetString);
@@ -127,43 +119,26 @@ export class TweetsService {
 
   async getCachedTweet(tweetId: string): Promise<Tweet | null> {
     try {
-      // Fetch the cached protobuf data
+      // Fetch the cached tweet JSON string from Redis
       const cachedTweetData = await this.CacheService.getCachedTweet(tweetId);
       if (!cachedTweetData) {
         return null;
       }
 
-      // Load the Protobuf schema
-      let protoPath = path.join(__dirname, '../../../src/tweets/tweet.proto');
-      switch (process.env.NODE_ENV) {
-        case 'production':
-          protoPath = path.join(__dirname, 'tweets/tweet.proto');
-          break;
-        case 'test':
-          protoPath = path.join(__dirname, 'tweet.proto');
-      }
-
-      const TweetProto = await protobuf.load(protoPath);
-      const TweetType = TweetProto.lookupType('Tweet');
-
-      // Decode the Protobuf data
-      const decodedTweet = TweetType.decode(
-        Buffer.from(cachedTweetData, 'base64'),
-      );
-      const tweetObject = TweetType.toObject(decodedTweet, {
-        longs: String, // Convert longs to strings if needed
-        enums: String, // Convert enums to strings if needed
-        defaults: true, // Include default values
-      });
+      // Parse the JSON string into an object
+      const tweetObject = JSON.parse(cachedTweetData);
 
       // Convert the plain object to a Tweet entity
       const tweetEntity = new Tweet();
       tweetEntity.id = tweetObject.id;
       tweetEntity.content = tweetObject.content;
-      tweetEntity.author = tweetObject.author;
-      tweetEntity.hashtags = tweetObject.hashtags.map((name) => ({ name })); // Convert hashtags
-      tweetEntity.location = tweetObject.location;
       tweetEntity.category = tweetObject.category;
+      tweetEntity.location = tweetObject.location;
+      tweetEntity.createdAt = new Date(tweetObject.createdAt);
+      tweetEntity.updatedAt = new Date(tweetObject.updatedAt);
+
+      tweetEntity.author = tweetObject.authorId; // Simple mapping for the `author`
+      tweetEntity.hashtags = tweetObject.hashtags; // Mapping hashtags
 
       return tweetEntity;
     } catch (error) {
@@ -188,9 +163,9 @@ export class TweetsService {
     }
 
     // Determine the starting index for pagination
-    const offset = (page - 1) * limit;
+    const offset = page * limit;
 
-    const nowStamp = Date.now();
+    const nowStamp = Date.now() / 1000;
     // Here we create timeStamp range (creation date range) of tweets we want to fetch
     // These parameters could also be added to GraphQL params if needed
     //toStamp is timestamp to which tweets must be fetched
@@ -208,7 +183,7 @@ export class TweetsService {
       );
 
     let privateTweetCachedItems: { score: number; item: string }[] = [];
-    user.groups.forEach(async (group) => {
+    for (const group of user.groups) {
       const fetchedItems = await this.CacheService.paginatePrivateTweetIds(
         group.id,
         fromStamp,
@@ -218,19 +193,23 @@ export class TweetsService {
       );
 
       privateTweetCachedItems = [...privateTweetCachedItems, ...fetchedItems];
-    });
-
+    }
     // Combine and deduplicate tweet IDs
     const allTweetCachedItems = [
       ...new Set([...publicTweetCachedItems, ...privateTweetCachedItems]),
     ];
 
+    // Create a map to filter out duplicate items by id
+    const uniqueTweetCachedItems = Array.from(
+      new Map(allTweetCachedItems.map((item) => [item.item, item])).values(),
+    );
+
     // Sort tweets by createdAt in descending order (based on their score which is tweet's created at stamp stored in cache layer)
-    allTweetCachedItems.sort((a, b) => b.score - a.score);
+    uniqueTweetCachedItems.sort((a, b) => b.score - a.score);
 
     // Fetch tweets by ID using getCachedTweet
     const tweets = await Promise.all(
-      allTweetCachedItems.map((itemKey) =>
+      uniqueTweetCachedItems.map((itemKey) =>
         this.getCachedTweet(itemKey.item.split('_')[0]),
       ),
     );
@@ -339,9 +318,9 @@ export class TweetsService {
       relations: ['author', 'hashtags', 'parentTweet', 'editableGroups'],
     });
 
-    const user = await this.userRepository.findOne({
-      where: { id: userId },
-    });
+    const user = await this.usersService.findOneWithRelations(userId, [
+      'groups',
+    ]);
     if (!user) {
       throw new Error('User not found');
     }
@@ -393,14 +372,13 @@ export class TweetsService {
           depthLevel + 1,
         );
       }
-    } else if (
-      (viewPermissionsUserIds && viewPermissionsUserIds.length > 0) ||
-      (viewPermissionsGroupIds && viewPermissionsGroupIds.length > 0)
-    ) {
-      return [depthLevel, viewPermissionsUserIds, viewPermissionsGroupIds];
     }
 
-    return [depthLevel, 'public'];
+    return [
+      depthLevel,
+      viewPermissionsUserIds || [],
+      viewPermissionsGroupIds || [],
+    ];
   }
 
   async determineTweetEditability(
@@ -422,14 +400,12 @@ export class TweetsService {
           depthLevel + 1,
         );
       }
-    } else if (
-      (editPermissionsUserIds && editPermissionsUserIds.length > 0) ||
-      (editPermissionsGroupIds && editPermissionsGroupIds.length > 0)
-    ) {
-      return [depthLevel, editPermissionsUserIds, editPermissionsGroupIds];
     }
-
-    return [depthLevel, 'public'];
+    return [
+      depthLevel,
+      editPermissionsUserIds || [],
+      editPermissionsGroupIds || [],
+    ];
   }
 
   async updateTweetPermissions(
@@ -469,6 +445,9 @@ export class TweetsService {
       throw new Error('You are not the author of this tweet');
     }
 
+    console.log(
+      `calling updateTweetPermissions with following data: inheritViewPermissions: ${inheritViewPermissions}, inheritEditPermissions: ${inheritEditPermissions}, viewPermissionUserId: ${viewPermissionsUserIds}, viewPermissionGroupIds: ${viewPermissionsGroupIds}, editPermissionUserIds: ${editPermissionsUserIds}, editPermissionUserIds: ${editPermissionsGroupIds}`,
+    );
     let publicViewableTweet = false;
     let publicEditableTweet = false;
 
@@ -482,17 +461,23 @@ export class TweetsService {
     if (tweetViewPermissions.length == 2) {
       // public tweet
       publicViewableTweet = true;
+      console.log(
+        `tweet is considered as publicly viewable, tweetId: ${tweet.id}`,
+      );
     } else {
       // private tweet
       const [depth, allowedUserIDs, allowedGroupIDs] = tweetViewPermissions;
       // The viewableGroups will only be set if there is no permission inheritance
-      if (depth == 0) {
+      if (depth == 0 && (allowedGroupIDs.length > 0 || allowedUserIDs.length)) {
         const groupsToBeSet = await this.assignGroupsToUsers(
           allowedUserIDs,
           allowedGroupIDs,
           tweet.author.id,
         );
-        tweet.viewableGroups = groupsToBeSet;
+
+        if (groupsToBeSet.length > 0) {
+          tweet.viewableGroups = groupsToBeSet;
+        }
       }
     }
 
@@ -510,13 +495,16 @@ export class TweetsService {
       // private tweet
       const [depth, allowedUserIDs, allowedGroupIDs] = tweetEditPermissions;
       // The editableGroups will only be set if there is no permission inheritance
-      if (depth == 0) {
+      if (depth == 0 && (allowedGroupIDs.length > 0 || allowedUserIDs.length)) {
         const groupsToBeSet = await this.assignGroupsToUsers(
           allowedUserIDs,
           allowedGroupIDs,
           tweet.author.id,
         );
-        tweet.editableGroups = groupsToBeSet;
+
+        if (groupsToBeSet.length > 0) {
+          tweet.editableGroups = groupsToBeSet;
+        }
       }
     }
     // Save updated tweet permissions
@@ -528,7 +516,7 @@ export class TweetsService {
         updatedTweet.id,
         updatedTweet.hashtags.map((hashtag) => hashtag.name),
         updatedTweet.category,
-        updatedTweet.createdAt.getTime(),
+        updatedTweet.createdAt.getTime() / 1000,
       );
     } else {
       updatedTweet.viewableGroups.forEach((group) => {
@@ -537,7 +525,7 @@ export class TweetsService {
           updatedTweet.id,
           updatedTweet.hashtags.map((hashtag) => hashtag.name),
           updatedTweet.category,
-          updatedTweet.createdAt.getTime(),
+          updatedTweet.createdAt.getTime() / 1000,
         );
       });
     }

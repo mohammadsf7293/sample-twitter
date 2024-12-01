@@ -619,7 +619,6 @@ describe('CacheService', () => {
     });
   });
 
-  //INJA => Private
   describe('paginatePrivateTweetIds', () => {
     it('should return an array of items with scores', async () => {
       // Mocking Redis response

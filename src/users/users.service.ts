@@ -50,6 +50,9 @@ export class UsersService {
     groupIds: number[],
   ): Promise<boolean> {
     const userGroups = user.groups;
+    if (user.groups.length == 0) {
+      return false;
+    }
     return groupIds.some((groupId) =>
       userGroups.some((group) => group.id === groupId),
     );

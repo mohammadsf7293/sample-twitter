@@ -62,11 +62,11 @@ export class TweetsResolver {
   private toGraphQLTweet(tweetEntity: Tweet): TweetDTO {
     return {
       id: tweetEntity.id,
-      createTime: tweetEntity.createdAt.getTime(),
-      updateTime: tweetEntity.updatedAt.getTime(),
+      createTime: Math.round(tweetEntity.createdAt.getTime() / 1000),
+      updateTime: Math.round(tweetEntity.updatedAt.getTime() / 1000),
       authorId: tweetEntity.author.id.toString(),
       content: tweetEntity.content,
-      hashtags: tweetEntity.hashtags.map((hashtag) => hashtag.name) || [],
+      hashtags: tweetEntity.hashtags.map((hashtag) => hashtag.toString()),
       parentTweetId: tweetEntity.parentTweet
         ? tweetEntity.parentTweet.id
         : null,

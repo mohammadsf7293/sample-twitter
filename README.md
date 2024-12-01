@@ -51,7 +51,7 @@ In the future, the list of user-created groups can be displayed in the UI to avo
 
 ### Redis Cache
 - **Structure**:
-  - Each tweet is serialized using **protobuf** and stored in Redis with a key: `tweet:proto:$tweetID`.
+  - Each tweet is serialized using JSON (but **protobuf** also could be used as a further improvement) and stored in Redis with a key: `cache:tweet:$tweetID`.
   - A **TTL (Time-To-Live)** is assigned to cached tweets to ensure only relevant data is stored.
   - Cache updates occur during tweet creation or modification.  
 
@@ -106,7 +106,6 @@ Instead of querying MySQL for every user feed request:
   Similar to public tweets, private tweets for groups are stored in **Redis ZSETs**.  
   - Large datasets are chunked into separate keys based on time.  
 
-The same structure can be applied to cache the `edit permissions` of the tweet.
 ---
 
 ## Final Feed Construction

@@ -1,6 +1,7 @@
 import { Injectable, Inject } from '@nestjs/common';
 import * as Redis from 'ioredis';
 import { CacheKeys, CacheKeysTTLs } from './constants/cache.constants';
+import { off } from 'process';
 
 @Injectable()
 export class CacheService {
@@ -107,8 +108,8 @@ export class CacheService {
     try {
       const members = await this.redis.zrevrangebyscore(
         CacheKeys.PUBLIC_VIEWABLE_TWEETS_ZSET,
-        creationTimestampFrom,
         creationTimestampTo,
+        creationTimestampFrom,
         'WITHSCORES',
         'LIMIT',
         offset,
@@ -174,8 +175,8 @@ export class CacheService {
       const key = `${CacheKeys.PRIVATE_GROUP_VIEWABLE_TWEETS_ZSET_PREFIX}${groupId.toString()}`;
       const members = await this.redis.zrevrangebyscore(
         key,
-        creationTimestampFrom,
         creationTimestampTo,
+        creationTimestampFrom,
         'WITHSCORES',
         'LIMIT',
         offset,
