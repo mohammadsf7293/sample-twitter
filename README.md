@@ -164,8 +164,75 @@ If you make any changes to the `*.graphql` files in any module, you will need to
 ```bash
 yarn generate:typings
 ```
+# Sample GraphQL Queries to Simplify Your Testing
+## Creating Tweet
+```
+mutation {
+  createTweet(createTweetInput: {
+    content: "Hello World!",
+    authorId: 1,
+    hashtags: ["#greeting", "#greetings"],
+    location: "Tehran",
+    category: "Tech"
+  }) {
+    id
+    content
+    authorId
+    hashtags
+    location
+    category
+  }
+}
+```
 
-## Run tests
+## Updating Tweet permissions
+```
+mutation UpdateTweetPermissions {
+  updateTweetPermissions(
+    id: "839f5b99-2abd-4f33-aa63-ca92ff40a435",
+    input: {
+      inheritViewPermissions: false,
+      inheritEditPermissions: false,
+      viewPermissionsUserIds: [1,2],
+      viewPermissionsGroupIds: [1,2],
+      editPermissionsUserIds: [1,2],
+      editPermissionsGroupIds: [1,2],
+    },
+    userId: 1
+  )
+}
+```
+## Can Edit
+```
+query CanEdit {
+  canEditTweet(
+    tweetId: "839f5b99-2abd-4f33-aa63-ca92ff40a435",
+    userId: 3
+  )
+}
+```
+
+## Paginate Tweets
+```
+query PaginateTweets {
+  paginateTweets(userId: 1, limit: 10, page: 0) {
+    nodes {
+      id
+      createTime
+      updateTime
+      authorId
+      content
+      hashtags
+      parentTweetId
+      category
+      location
+    }
+    hasNextPage
+  }
+}
+```
+
+# Run tests
 
 ```bash
 # unit tests
