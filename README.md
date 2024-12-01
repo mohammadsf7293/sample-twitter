@@ -48,6 +48,7 @@ In the future, the list of user-created groups can be displayed in the UI to avo
 <p align="center">
  <img src="https://ipfs.io/ipfs/Qmd1xhbQ694WtUvtB56K2HDXCE3jqeHJQQ1f42ic2Z91ax" style="width:45vw;" alt="Cache Architecture" />
 </p>
+I have used this caching design in the *Quiz of Kings* game, and it worked smoothly with over 30 million users and nearly 1 million daily active users.
 
 ### Redis Cache
 - **Structure**:
@@ -117,6 +118,7 @@ Instead of querying MySQL for every user feed request:
 ---
 
 ### Future Improvements
+- **Adding "Seen" Feature**: By introducing a "seen" feature with a `seen` table (a relation between `user_id` and `tweet_id`) and leveraging Redis caching mechanisms (using data structures like ZSET or SET), we can prevent the display of repetitive tweets that users have already seen.
 
 To further enhance the system's scalability and performance, the following improvements can be implemented:
 
