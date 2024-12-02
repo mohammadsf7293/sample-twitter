@@ -2,6 +2,7 @@ import {
   Entity,
   PrimaryGeneratedColumn,
   Column,
+  Unique,
   ManyToMany,
   CreateDateColumn,
   UpdateDateColumn,
@@ -11,6 +12,7 @@ import { Group } from '../groups/group.entity';
 import { Tweet } from '../tweets/tweet.entity';
 
 @Entity()
+@Unique(['userName'])
 export class User {
   @PrimaryGeneratedColumn()
   id: number;

@@ -179,7 +179,7 @@ export class TweetsService {
         fromStamp,
         toStamp,
         offset,
-        limit,
+        limit * 2,
       );
 
     let privateTweetCachedItems: { score: number; item: string }[] = [];
@@ -189,7 +189,7 @@ export class TweetsService {
         fromStamp,
         toStamp,
         offset,
-        limit,
+        limit * 2,
       );
 
       privateTweetCachedItems = [...privateTweetCachedItems, ...fetchedItems];
@@ -201,7 +201,7 @@ export class TweetsService {
         fromStamp,
         toStamp,
         offset,
-        limit,
+        limit * 2,
       );
 
     // Combine and deduplicate tweet IDs
