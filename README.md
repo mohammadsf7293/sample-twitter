@@ -41,6 +41,10 @@ The newly created group's ID is then assigned to the tweet's permissions. This a
 
 - I have converted `Date` types to timestamps to eliminate the need to format dates for different timezones. This is because a timestamp doesn't have a timezone, and on the frontend side, it can be converted to a string based on the user's timezone.
 
+- I haven't used Guard or any authentication mechanism to simplify testing.
+
+- The application's architecture is inspired by <a target="_blank" href="https://github.com/nestjs/nest/tree/master/sample">samples from the NestJS official repository</a>. However, some design aspects may require improvements, which I have outlined in the `Future Enhancements` section.
+
 ### Future Enhancements
 
 In the future, the list of user-created groups can be displayed in the UI to avoid repeatedly creating groups with the same users or items. Additionally, server-side logic can be implemented to detect and prevent the creation of duplicate groups. If a user attempts to create a group with identical members to an existing one, the system could
