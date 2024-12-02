@@ -308,6 +308,117 @@ describe('CacheService', () => {
     });
   });
 
+  describe('paginateUserCreatedTweetIds', () => {
+    it('should paginate user created tweet IDs correctly', async () => {
+      // Arrange
+      const userId = 123;
+      const creationTimestampFrom = 1670000000000;
+      const creationTimestampTo = 1679999999999;
+      const offset = 0;
+      const limit = 10;
+
+      const key = `${CacheKeys.PRIVATE_USER_SELF_CREATED_TWEETS_ZSET_PREFIX}${userId}`;
+      const mockMembers = [
+        'tweet_1_#test_news',
+        '1670001000000',
+        'tweet_2_#new_tech',
+        '1670002000000',
+        'tweet_3_#cool_updates',
+        '1670003000000',
+      ]; // Mock return value from zrevrangebyscore
+
+      jest
+        .spyOn(mockRedisClient, 'zrevrangebyscore')
+        .mockResolvedValue(mockMembers);
+
+      // Act
+      const result = await service.paginateUserCreatedTweetIds(
+        userId,
+        creationTimestampFrom,
+        creationTimestampTo,
+        offset,
+        limit,
+      );
+
+      // Assert
+      expect(mockRedisClient.zrevrangebyscore).toHaveBeenCalledWith(
+        key,
+        creationTimestampTo,
+        creationTimestampFrom,
+        'WITHSCORES',
+        'LIMIT',
+        offset,
+        limit,
+      );
+      expect(result).toEqual([
+        { item: 'tweet_1_#test_news', score: 1670001000000 },
+        { item: 'tweet_2_#new_tech', score: 1670002000000 },
+        { item: 'tweet_3_#cool_updates', score: 1670003000000 },
+      ]);
+    });
+
+    it('should throw an error if Redis fails to fetch tweet IDs', async () => {
+      // Arrange
+      const userId = 123;
+      const creationTimestampFrom = 1670000000000;
+      const creationTimestampTo = 1679999999999;
+      const offset = 0;
+      const limit = 10;
+
+      jest
+        .spyOn(mockRedisClient, 'zrevrangebyscore')
+        .mockRejectedValue(new Error('Redis failure'));
+
+      // Act & Assert
+      await expect(
+        service.paginateUserCreatedTweetIds(
+          userId,
+          creationTimestampFrom,
+          creationTimestampTo,
+          offset,
+          limit,
+        ),
+      ).rejects.toThrow('Could not find items from Zset');
+
+      expect(mockRedisClient.zrevrangebyscore).toHaveBeenCalled();
+    });
+
+    it('should log an error if Redis fails to fetch tweet IDs', async () => {
+      // Arrange
+      const userId = 123;
+      const creationTimestampFrom = 1670000000000;
+      const creationTimestampTo = 1679999999999;
+      const offset = 0;
+      const limit = 10;
+
+      const consoleErrorSpy = jest
+        .spyOn(console, 'error')
+        .mockImplementation(() => {});
+
+      jest
+        .spyOn(mockRedisClient, 'zrevrangebyscore')
+        .mockRejectedValue(new Error('Redis failure'));
+
+      // Act
+      await expect(
+        service.paginateUserCreatedTweetIds(
+          userId,
+          creationTimestampFrom,
+          creationTimestampTo,
+          offset,
+          limit,
+        ),
+      ).rejects.toThrow('Could not find items from Zset');
+
+      // Assert
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        'Error fetching items from zset:',
+        new Error('Redis failure'),
+      );
+      consoleErrorSpy.mockRestore();
+    });
+  });
+
   describe('addPublicViewableTweetToZSet', () => {
     it('should add a public tweet to the ZSET with the correct score and value', async () => {
       const tweetId = '12345';

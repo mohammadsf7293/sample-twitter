@@ -96,6 +96,42 @@ export class CacheService {
     }
   }
 
+  async paginateUserCreatedTweetIds(
+    userId: number,
+    creationTimestampFrom: number,
+    creationTimestampTo: number,
+    offset: number,
+    limit: number,
+  ): Promise<{ score: number; item: string }[]> {
+    try {
+      const key = `${CacheKeys.PRIVATE_USER_SELF_CREATED_TWEETS_ZSET_PREFIX}${userId}`;
+
+      const members = await this.redis.zrevrangebyscore(
+        key,
+        creationTimestampTo,
+        creationTimestampFrom,
+        'WITHSCORES',
+        'LIMIT',
+        offset,
+        limit,
+      );
+
+      // Convert the flat array into an array of objects
+      const results = [];
+      for (let i = 0; i < members.length; i += 2) {
+        results.push({
+          item: members[i],
+          score: parseFloat(members[i + 1]),
+        });
+      }
+
+      return results;
+    } catch (error) {
+      console.error('Error fetching items from zset:', error);
+      throw new Error('Could not find items from Zset');
+    }
+  }
+
   /**
    * Add a public viewable tweet to a ZSET with its creation timestamp as the score.
    * @param tweetId - The ID of the tweet.
