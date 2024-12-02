@@ -85,6 +85,15 @@ export class TweetsService {
     // Cache the serialized tweet using the new cacheTweet method
     await this.cacheTweet(savedTweet);
 
+    // Store tweet to author created tweets cache
+    await this.CacheService.addUserCreatedTweetToZSet(
+      savedTweet.author.id,
+      savedTweet.id,
+      savedTweet.hashtags.map((hashtag) => hashtag.name),
+      savedTweet.category,
+      Math.round(savedTweet.createdAt.getTime() / 1000),
+    );
+
     return savedTweet;
   }
 

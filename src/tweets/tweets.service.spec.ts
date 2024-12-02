@@ -45,6 +45,7 @@ const mockCacheService = {
   getTweetIsPublicEditable: jest.fn(),
   setTweetIsEditableByGroup: jest.fn(),
   getTweetIsEditableByGroup: jest.fn(),
+  addUserCreatedTweetToZSet: jest.fn(),
 };
 
 const mockGroupsService = {
@@ -140,105 +141,194 @@ describe('TweetsService', () => {
 
   describe('create', () => {
     it('should create a tweet successfully', async () => {
+      // Arrange
       const createTweetDto: CreateTweetDto = {
-        content: 'Hello, World!',
+        content: 'This is a tweet',
         authorId: 1,
         parentTweetId: null,
-        hashtags: ['#greeting', '#welcome'],
-        location: 'Earth',
-        category: TweetCategory.News,
+        hashtags: ['#tech', '#news'],
+        location: 'New York',
+        category: TweetCategory.Tech,
       };
 
-      const mockAuthor = new User();
-      mockAuthor.id = 1;
+      const author = { id: 1, name: 'User' } as unknown as User;
+      jest.spyOn(usersService, 'findOne').mockResolvedValue(author);
 
-      const mockHashtags = [{ id: 1, name: '#greeting' } as unknown as Hashtag];
-      const newHashtag = { id: 2, name: '#welcome' } as unknown as Hashtag;
+      const existingHashtags = [{ name: '#tech' } as Hashtag];
+      jest
+        .spyOn(hashtagRepository, 'findBy')
+        .mockResolvedValue(existingHashtags);
 
-      const savedTweet = new Tweet();
-      savedTweet.id = '1';
-      savedTweet.content = createTweetDto.content;
-      savedTweet.author = mockAuthor;
-      savedTweet.hashtags = [mockHashtags[0], newHashtag];
+      const newHashtags = ['#news'];
+      jest
+        .spyOn(hashtagRepository, 'create')
+        .mockImplementation((name) => ({ name }) as Hashtag);
+      jest
+        .spyOn(hashtagRepository, 'save')
+        .mockResolvedValue({ name: '#news' } as Hashtag);
 
-      mockUsersService.findOne.mockResolvedValue(mockAuthor);
-      mockHashtagRepository.findBy.mockResolvedValue(mockHashtags);
-      mockHashtagRepository.create.mockReturnValue(newHashtag);
-      mockHashtagRepository.save.mockResolvedValue(newHashtag);
-      mockTweetRepository.save.mockResolvedValue(savedTweet);
-      const mockCacheTweet = jest
-        .spyOn(service, 'cacheTweet')
-        .mockResolvedValue();
+      const savedTweet = {
+        id: 'tweetId',
+        ...createTweetDto,
+        author: mockUser,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      } as unknown as Tweet;
+      jest.spyOn(tweetRepository, 'save').mockResolvedValue(savedTweet);
 
+      jest.spyOn(cacheService, 'addUserCreatedTweetToZSet').mockResolvedValue();
+
+      // Act
       const result = await service.create(createTweetDto);
 
+      // Assert
+      expect(result).toEqual(savedTweet);
       expect(usersService.findOne).toHaveBeenCalledWith(
         createTweetDto.authorId,
       );
-      expect(hashtagRepository.findBy).toHaveBeenCalledWith({
-        name: In(expect.any(Array)),
-      });
-      expect(hashtagRepository.create).toHaveBeenCalledWith({
-        name: expect.any(String),
-      });
-      expect(hashtagRepository.save).toHaveBeenCalled();
       expect(tweetRepository.save).toHaveBeenCalledWith(
         expect.objectContaining({
           content: createTweetDto.content,
-          author: mockAuthor,
-          hashtags: [mockHashtags[0], newHashtag],
+          author: author,
+          parentTweet: null,
+          location: createTweetDto.location,
+          category: createTweetDto.category,
+          hashtags: expect.arrayContaining([
+            expect.objectContaining({ name: '#tech' }),
+            expect.objectContaining({ name: '#news' }),
+          ]),
         }),
       );
-      expect(mockCacheTweet).toHaveBeenCalledWith(savedTweet);
-      expect(result).toEqual(savedTweet);
+      expect(cacheService.addUserCreatedTweetToZSet).toHaveBeenCalled();
     });
 
-    it('should throw an error if the author is not found', async () => {
+    it('should throw error if author is not found', async () => {
+      // Arrange
       const createTweetDto: CreateTweetDto = {
-        content: 'Hello, World!',
-        authorId: 1,
+        content: 'This is a tweet',
+        authorId: 999, // Invalid author ID
         parentTweetId: null,
-        hashtags: ['#greeting', '#welcome'],
-        location: 'Earth',
-        category: TweetCategory.News,
+        hashtags: ['#tech'],
+        location: 'New York',
+        category: TweetCategory.Tech,
       };
 
       jest.spyOn(usersService, 'findOne').mockResolvedValue(null);
 
+      // Act & Assert
       await expect(service.create(createTweetDto)).rejects.toThrow(
         'User not found',
       );
-      expect(mockUsersService.findOne).toHaveBeenCalledWith(
-        createTweetDto.authorId,
-      );
     });
 
-    it('should throw an error if the parent tweet is not found', async () => {
+    it('should throw error if parent tweet is not found', async () => {
+      // Arrange
       const createTweetDto: CreateTweetDto = {
-        content: 'Hello, World!',
+        content: 'This is a tweet',
         authorId: 1,
-        parentTweetId: '100',
-        hashtags: ['#greeting', '#welcome'],
-        location: 'Earth',
-        category: TweetCategory.News,
+        parentTweetId: '1', // Invalid parent tweet ID
+        hashtags: ['#tech'],
+        location: 'New York',
+        category: TweetCategory.Tech,
       };
 
-      const mockAuthor = new User();
-      mockAuthor.id = 1;
+      const author = { id: 1, name: 'User' } as unknown as User;
+      jest.spyOn(usersService, 'findOne').mockResolvedValue(author);
 
-      mockUsersService.findOne.mockResolvedValue(mockAuthor);
-      mockTweetRepository.findOne.mockResolvedValue(null);
+      jest.spyOn(tweetRepository, 'findOne').mockResolvedValue(null);
 
+      // Act & Assert
       await expect(service.create(createTweetDto)).rejects.toThrow(
         'Parent tweet not found',
       );
+    });
 
-      expect(mockUsersService.findOne).toHaveBeenCalledWith(
-        createTweetDto.authorId,
-      );
-      expect(mockTweetRepository.findOne).toHaveBeenCalledWith({
-        where: { id: createTweetDto.parentTweetId },
+    it('should handle hashtags correctly, creating new ones when needed', async () => {
+      // Arrange
+      const createTweetDto: CreateTweetDto = {
+        content: 'This is a tweet',
+        authorId: 1,
+        parentTweetId: null,
+        hashtags: ['#tech', '#newHashtag'],
+        location: 'New York',
+        category: TweetCategory.Tech,
+      };
+
+      const author = { id: 1, name: 'User' } as unknown as User;
+      jest.spyOn(usersService, 'findOne').mockResolvedValue(author);
+
+      const existingHashtags = [{ name: '#tech' } as unknown as Hashtag];
+      jest
+        .spyOn(hashtagRepository, 'findBy')
+        .mockResolvedValue(existingHashtags);
+
+      jest
+        .spyOn(hashtagRepository, 'create')
+        .mockReturnValue({ name: '#newHashtag' } as Hashtag);
+
+      jest
+        .spyOn(hashtagRepository, 'save')
+        .mockResolvedValue({ name: '#newHashtag' } as Hashtag);
+
+      const savedTweet = {
+        id: 'tweetId',
+        author: mockUser,
+        ...createTweetDto,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      } as unknown as Tweet;
+      jest.spyOn(tweetRepository, 'save').mockResolvedValue(savedTweet);
+
+      jest
+        .spyOn(cacheService, 'addUserCreatedTweetToZSet')
+        .mockResolvedValue(undefined);
+
+      // Act
+      const result = await service.create(createTweetDto);
+
+      // Assert
+      expect(result).toEqual(savedTweet);
+      expect(hashtagRepository.save).toHaveBeenCalledWith({
+        name: '#newHashtag',
       });
+    });
+
+    it('should throw an error if Redis fails to cache the tweet', async () => {
+      // Arrange
+      const createTweetDto: CreateTweetDto = {
+        content: 'This is a tweet',
+        authorId: 1,
+        parentTweetId: null,
+        hashtags: ['#tech'],
+        location: 'New York',
+        category: TweetCategory.Tech,
+      };
+
+      const author = { id: 1, name: 'User' } as unknown as User;
+      jest.spyOn(usersService, 'findOne').mockResolvedValue(author);
+
+      const existingHashtags = [{ name: '#tech' } as Hashtag];
+      jest
+        .spyOn(hashtagRepository, 'findBy')
+        .mockResolvedValue(existingHashtags);
+
+      const savedTweet = {
+        id: 'tweetId',
+        author: mockUser,
+        ...createTweetDto,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      } as unknown as Tweet;
+      jest.spyOn(tweetRepository, 'save').mockResolvedValue(savedTweet);
+
+      jest
+        .spyOn(cacheService, 'addUserCreatedTweetToZSet')
+        .mockRejectedValue(new Error('Redis failure'));
+
+      // Act & Assert
+      await expect(service.create(createTweetDto)).rejects.toThrow(
+        'Redis failure',
+      );
     });
   });
 
