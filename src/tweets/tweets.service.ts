@@ -93,7 +93,7 @@ export class TweetsService {
     const tweetData = {
       id: tweet.id,
       content: tweet.content,
-      authorId: tweet.author,
+      author: tweet.author,
       category: tweet.category,
       hashtags: tweet.hashtags,
       location: tweet.location,

@@ -243,7 +243,7 @@ describe('TweetsService', () => {
       const expectedTweetData = {
         id: mockTweet.id,
         content: mockTweet.content,
-        authorId: mockTweet.author,
+        author: mockTweet.author,
         category: mockTweet.category,
         hashtags: mockTweet.hashtags,
         location: mockTweet.location,
@@ -272,7 +272,7 @@ describe('TweetsService', () => {
       const expectedTweetData = {
         id: tweetWithMissingFields.id,
         content: tweetWithMissingFields.content,
-        authorId: tweetWithMissingFields.author,
+        author: tweetWithMissingFields.author,
         category: null,
         hashtags: [],
         location: null,
