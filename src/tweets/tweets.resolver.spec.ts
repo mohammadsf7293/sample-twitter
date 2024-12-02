@@ -3,7 +3,6 @@ import { TweetsResolver } from './tweets.resolver';
 import { TweetsService } from './tweets.service';
 import { Tweet, TweetCategory } from './tweet.entity';
 import { PaginatedTweets, Tweet as TweetDTO } from 'src/graphql.schema';
-import { CreateTweetDto } from './dto/create-tweet.dto';
 import { UpdateTweetDto } from './dto/update-tweet.dto';
 import { UpdateTweetPermissionsDto } from './dto/update-tweet-permissions.dto';
 import { Hashtag } from './hashtag.entity';
