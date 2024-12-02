@@ -33,6 +33,9 @@ export class GroupsService {
     const users = await this.usersService.findUsersByIds(
       createGroupDto.userIds,
     );
+    if (users.length == 0) {
+      throw new Error(`all users given in the userIds list are not found`);
+    }
 
     const parentGroup = await this.groupRepository.findOneBy({
       id: createGroupDto.parentGroupId,

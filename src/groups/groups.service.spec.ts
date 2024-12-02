@@ -4,6 +4,8 @@ import { Group } from './group.entity';
 import { GroupsService } from './groups.service';
 import { In, Repository } from 'typeorm';
 import { UsersService } from '../users/users.service';
+import { CreateGroupDto } from './dto/create-group.dto';
+import { User } from '../users/user.entity';
 
 // Mock data for users and groups
 const mockUsers = [
@@ -12,13 +14,13 @@ const mockUsers = [
     userName: 'User1',
     firstName: 'User #1 firstName',
     lastName: 'User #1 lastName',
-  },
+  } as unknown as User,
   {
     id: 2,
     userName: 'User2',
     firstName: 'User #2 firstName',
     lastName: 'User #2 lastName',
-  },
+  } as unknown as User,
 ];
 
 const mockParentGroup = { id: 3, users: [], childGroups: [], parentGroups: [] };
@@ -92,65 +94,143 @@ describe('GroupsService', () => {
     expect(service).toBeDefined();
   });
 
-  describe('create()', () => {
-    // it('should create a new group successfully', async () => {
-    //   const createGroupDto: CreateGroupDto = {
-    //     name: 'Test Group',
-    //     userIds: [1, 2],
-    //     parentGroupId: 123,
-    //     creatorId: 1,
-    //   };
+  describe('create', () => {
+    it('should create a new group successfully', async () => {
+      const createGroupDto: CreateGroupDto = {
+        ...oneGroup,
+        name: 'New Group',
+        userIds: [1, 2],
+        parentGroupId: null,
+        creatorId: 1,
+      };
 
-    //   const users = [
-    //     { id: '1', name: 'User 1' },
-    //     { id: '2', name: 'User 2' },
-    //   ];
-    //   const parentGroup = { id: 123, name: 'Parent Group' } as unknown as Group;
-    //   const creator = { id: 1, name: 'Creator' } as unknown as User;
+      const users = [
+        { id: 1, userName: 'User1' } as User,
+        { id: 2, userName: 'User2' } as User,
+      ];
+      const parentGroup = null;
+      const creator = { id: 1, userName: 'Creator' } as User;
 
-    //   //INJA
-    //   // Mocking services
-    //   jest.spyOn(mockUsersService, 'findUsersByIds').mockResolvedValue(users);
-    //   // mockUsersService.findUsersByIds = jest.fn().mockResolvedValue(users);
-    //   jest
-    //     .spyOn(mockUsersService, 'findOneWithRelations')
-    //     .mockResolvedValue(creator);
-    //   // mockUsersService.findOneWithRelations = jest
-    //   //   .fn()
-    //   //   .mockResolvedValue(creator);
-    //   jest
-    //     .spyOn(mockGroupRepository, 'findOneBy')
-    //     .mockResolvedValue(parentGroup);
-    //   // mockGroupRepository.findOneBy = jest.fn().mockResolvedValue(parentGroup);
-    //   jest
-    //     .spyOn(mockGroupRepository, 'save')
-    //     .mockResolvedValue({ id: 456, ...createGroupDto });
-    //   // mockGroupRepository.save = jest
-    //   //   .fn()
-    //   //   .mockResolvedValue({ id: 456, ...createGroupDto });
+      jest.spyOn(usersService, 'findUsersByIds').mockResolvedValue(users);
 
-    //   const result = await service.create(createGroupDto);
+      jest.spyOn(groupRepository, 'findOneBy').mockResolvedValue(parentGroup);
 
-    //   expect(result).toEqual({ id: 456, ...createGroupDto });
-    //   expect(usersService.findUsersByIds).toHaveBeenCalledWith(
-    //     createGroupDto.userIds,
-    //   );
-    //   expect(usersService.findOneWithRelations).toHaveBeenCalledWith(
-    //     createGroupDto.creatorId,
-    //     [],
-    //   );
-    //   expect(groupRepository.findOneBy).toHaveBeenCalledWith({
-    //     id: createGroupDto.parentGroupId,
-    //   });
-    //   expect(groupRepository.save).toHaveBeenCalledWith(
-    //     expect.objectContaining({
-    //       name: createGroupDto.name,
-    //       users,
-    //       parentGroup,
-    //       creator,
-    //     }),
-    //   );
-    // });
+      jest
+        .spyOn(usersService, 'findOneWithRelations')
+        .mockResolvedValue(creator);
+
+      jest.spyOn(groupRepository, 'save').mockResolvedValue({
+        id: 1, // Mocked ID after saving
+        name: createGroupDto.name,
+        users: await usersService.findUsersByIds(createGroupDto.userIds),
+        parentGroup: null, // or the parent group if available
+        creator: creator, // creator object
+        childGroups: [], // assuming no child groups for now
+        viewableTweets: [],
+        editableTweets: [], // assuming no viewable tweets
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+      const result = await service.create(createGroupDto);
+
+      expect(result.name).toBe('New Group');
+      expect(result.users).toEqual(users);
+      expect(result.creator).toEqual(creator);
+      expect(groupRepository.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'New Group',
+          users,
+          parentGroup: null,
+          creator,
+        }),
+      );
+    });
+
+    it('should throw an error if creator is not found', async () => {
+      const createGroupDto: CreateGroupDto = {
+        name: 'New Group',
+        userIds: [1, 2],
+        parentGroupId: null,
+        // Non-existing creator ID
+        creatorId: 99,
+      };
+
+      jest.spyOn(usersService, 'findUsersByIds').mockResolvedValue(mockUsers);
+      jest.spyOn(groupRepository, 'findOneBy').mockResolvedValue(null);
+      jest.spyOn(usersService, 'findOneWithRelations').mockResolvedValue(null); // Simulate that creator is not found
+
+      await expect(service.create(createGroupDto)).rejects.toThrowError(
+        `Creator with ID 99 not found`,
+      );
+    });
+
+    it('should throw an error if users are not found', async () => {
+      const createGroupDto: CreateGroupDto = {
+        name: 'New Group',
+        userIds: [1, 2],
+        parentGroupId: null,
+        creatorId: 1,
+      };
+
+      const creator = { id: 1, userName: 'Creator' } as unknown as User;
+      // Simulating no users found
+      jest.spyOn(usersService, 'findUsersByIds').mockResolvedValue([]);
+      jest.spyOn(groupRepository, 'findOneBy').mockResolvedValue(null);
+      jest
+        .spyOn(usersService, 'findOneWithRelations')
+        .mockResolvedValue(creator);
+
+      await expect(service.create(createGroupDto)).rejects.toThrowError(
+        'all users given in the userIds list are not found',
+      );
+    });
+
+    it('should handle the parent group being not found', async () => {
+      const createGroupDto: CreateGroupDto = {
+        name: 'New Group',
+        userIds: [1, 2],
+        parentGroupId: 999, // Non-existing parent group ID
+        creatorId: 1,
+      };
+
+      const users = [
+        { id: 1, userName: 'User1' } as unknown as User,
+        { id: 2, userName: 'User2' } as unknown as User,
+      ];
+      const creator = { id: 1, userName: 'Creator' } as unknown as User;
+
+      jest.spyOn(usersService, 'findUsersByIds').mockResolvedValue(users);
+      jest.spyOn(groupRepository, 'findOneBy').mockResolvedValue(null);
+      jest
+        .spyOn(usersService, 'findOneWithRelations')
+        .mockResolvedValue(creator);
+      jest.spyOn(groupRepository, 'save').mockResolvedValue({
+        id: 1, // Mocked ID after saving
+        name: createGroupDto.name,
+        users: await usersService.findUsersByIds(createGroupDto.userIds),
+        parentGroup: null, // or the parent group if available
+        creator: creator, // creator object
+        childGroups: [], // assuming no child groups for now
+        viewableTweets: [],
+        editableTweets: [], // assuming no viewable tweets
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+
+      const result = await service.create(createGroupDto);
+
+      expect(result.name).toBe('New Group');
+      expect(result.users).toEqual(users);
+      expect(result.creator).toEqual(creator);
+      expect(groupRepository.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'New Group',
+          users,
+          parentGroup: null,
+          creator,
+        }),
+      );
+    });
   });
 
   describe('findAll()', () => {
@@ -169,7 +249,9 @@ describe('GroupsService', () => {
 
   describe('findOne()', () => {
     it('should get a single group with users and no parentGroups', () => {
-      const repoSpy = jest.spyOn(groupRepository, 'findOneBy');
+      const repoSpy = jest
+        .spyOn(groupRepository, 'findOneBy')
+        .mockResolvedValue(oneGroup as unknown as Group);
       expect(service.findOne(1)).resolves.toEqual(oneGroup);
       expect(repoSpy).toBeCalledWith({ id: 1 });
 
