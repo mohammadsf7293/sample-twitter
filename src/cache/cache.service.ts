@@ -66,6 +66,37 @@ export class CacheService {
   }
 
   /**
+   * Add a tweet to ZSET of their created tweets.
+   * @param tweetId - The ID of the tweet.
+   * @param hashtags - An array of hashtags associated with the tweet.
+   * @param category - category of the tweet.
+   * @param creationTimestamp - The timestamp when the tweet was created.
+   */
+  async addUserCreatedTweetToZSet(
+    userId: number,
+    tweetId: string,
+    hashtags: string[],
+    category: string,
+    creationTimestamp: number,
+  ): Promise<void> {
+    const memberItem = `${tweetId}_${hashtags.join('_')}_${category}`;
+    const key = `${CacheKeys.PRIVATE_USER_SELF_CREATED_TWEETS_ZSET_PREFIX}${userId}`;
+    try {
+      await this.redis.zadd(key, creationTimestamp, memberItem);
+
+      await this.redis.expire(
+        key,
+        CacheKeysTTLs.PRIVATE_USER_SELF_CREATED_TWEETS_ZSET,
+      );
+    } catch (error) {
+      // Log or handle the error as necessary
+      console.error('Error adding tweet to ZSET:', error);
+      //TODO: there must be an error management, defining logical and internal errors
+      throw new Error('Could not add public tweet to ZSET');
+    }
+  }
+
+  /**
    * Add a public viewable tweet to a ZSET with its creation timestamp as the score.
    * @param tweetId - The ID of the tweet.
    * @param hashtags - An array of hashtags associated with the tweet.

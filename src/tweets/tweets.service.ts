@@ -308,6 +308,9 @@ export class TweetsService {
       where: { id: tweetId },
       relations: ['author', 'hashtags', 'parentTweet', 'editableGroups'],
     });
+    if (!tweet) {
+      throw new Error('Tweet not found');
+    }
 
     const user = await this.usersService.findOneWithRelations(userId, [
       'groups',
@@ -316,8 +319,8 @@ export class TweetsService {
       throw new Error('User not found');
     }
 
-    if (!tweet) {
-      throw new Error('Tweet not found');
+    if (userId == tweet.author.id) {
+      return true;
     }
 
     const tweetEditPermissions = await this.determineTweetEditability(

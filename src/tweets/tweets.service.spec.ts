@@ -59,22 +59,28 @@ const mockUsersService = {
   findOneWithRelations: jest.fn(),
 };
 
+const mockUser = {
+  id: 1,
+  name: 'Test User',
+  groups: [{ id: 1 }],
+} as unknown as User;
+
+const mockUser2 = {
+  id: 2,
+  name: 'Test User2',
+  groups: [{ id: 1 }],
+} as unknown as User;
+
 const mockTweet = {
   id: '1',
   content: 'Test tweet',
-  author: { id: 1 },
+  author: mockUser2,
   editableGroups: [{ id: 1 }, { id: 2 }],
   parentTweet: null,
   hashtags: [],
   createdAt: new Date(),
   updatedAt: new Date(),
 } as unknown as Tweet;
-
-const mockUser = {
-  id: 1,
-  name: 'Test User',
-  groups: [{ id: 1 }],
-} as unknown as User;
 
 describe('TweetsService', () => {
   let service: TweetsService;
@@ -1107,6 +1113,15 @@ describe('TweetsService', () => {
   });
 
   describe('canEdit', () => {
+    it('should return true for the author', async () => {
+      jest.spyOn(tweetRepository, 'findOne').mockResolvedValue(mockTweet);
+
+      // User id is 1 and also author id of the mocked tweet is one
+      const result = await service.canEdit(2, '1');
+
+      expect(result).toBe(true);
+    });
+
     it('should return true if the tweet is public editable', async () => {
       jest
         .spyOn(service, 'determineTweetEditability')
@@ -1114,6 +1129,33 @@ describe('TweetsService', () => {
 
       const mockTweet = {
         id: '1',
+        editableGroups: [],
+        author: mockUser2,
+      };
+      const mockUser = { id: 1, groups: [] };
+
+      mockTweetRepository.findOne.mockResolvedValue(mockTweet);
+      mockUsersService.findOneWithRelations.mockResolvedValue(mockUser);
+
+      const result = await service.canEdit(1, '1');
+
+      expect(result).toBe(true);
+      expect(mockTweetRepository.findOne).toHaveBeenCalledWith({
+        where: { id: '1' },
+        relations: ['author', 'hashtags', 'parentTweet', 'editableGroups'],
+      });
+      expect(mockUsersService.findOneWithRelations).toHaveBeenCalledWith(1, [
+        'groups',
+      ]);
+    });
+    it('should return true if the tweet is public editable', async () => {
+      jest
+        .spyOn(service, 'determineTweetEditability')
+        .mockResolvedValue([0, 'public']);
+
+      const mockTweet = {
+        id: '1',
+        author: mockUser2,
         editableGroups: [],
       };
       const mockUser = { id: 1, groups: [] };
@@ -1136,6 +1178,7 @@ describe('TweetsService', () => {
     it('should return true if the user belongs to the allowed groups', async () => {
       const mockTweet = {
         id: '1',
+        author: mockUser2,
         editableGroups: [{ id: 1 }],
       };
       const mockUser = { id: 1, groups: [{ id: 1 }] };
@@ -1161,6 +1204,7 @@ describe('TweetsService', () => {
     it('should return false if the user does not belong to the allowed groups', async () => {
       const mockTweet = {
         id: '1',
+        author: mockUser2,
         editableGroups: [{ id: 2 }],
       };
       const mockUser = { id: 1, groups: [{ id: 3 }] };

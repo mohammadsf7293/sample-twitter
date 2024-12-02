@@ -241,6 +241,73 @@ describe('CacheService', () => {
     });
   });
 
+  describe('addUserCreatedTweetToZSet', () => {
+    it('should successfully add tweet to ZSET', async () => {
+      // Arrange
+      const userId = 123;
+      const tweetId = 'tweet123';
+      const hashtags = ['#test', '#new'];
+      const category = 'news';
+      const creationTimestamp = Date.now();
+
+      const key = `${CacheKeys.PRIVATE_USER_SELF_CREATED_TWEETS_ZSET_PREFIX}${userId}`;
+      const memberItem = `${tweetId}_${hashtags.join('_')}_${category}`;
+
+      jest.spyOn(mockRedisClient, 'zadd').mockResolvedValue(1);
+      jest.spyOn(mockRedisClient, 'expire').mockResolvedValue(1);
+
+      // Act
+      await service.addUserCreatedTweetToZSet(
+        userId,
+        tweetId,
+        hashtags,
+        category,
+        creationTimestamp,
+      );
+
+      // Assert
+      expect(mockRedisClient.zadd).toHaveBeenCalledWith(
+        key,
+        creationTimestamp,
+        memberItem,
+      );
+      expect(mockRedisClient.expire).toHaveBeenCalledWith(
+        key,
+        CacheKeysTTLs.PRIVATE_USER_SELF_CREATED_TWEETS_ZSET,
+      );
+    });
+
+    it('should throw an error if Redis fails to add tweet to ZSET', async () => {
+      // Arrange
+      const userId = 123;
+      const tweetId = 'tweet123';
+      const hashtags = ['#test', '#new'];
+      const category = 'news';
+      const creationTimestamp = Date.now();
+
+      jest
+        .spyOn(mockRedisClient, 'zadd')
+        .mockRejectedValue(new Error('Redis failure'));
+      jest
+        .spyOn(mockRedisClient, 'expire')
+        .mockRejectedValue(new Error('Redis failure'));
+
+      // Act & Assert
+      await expect(
+        service.addUserCreatedTweetToZSet(
+          userId,
+          tweetId,
+          hashtags,
+          category,
+          creationTimestamp,
+        ),
+      ).rejects.toThrow('Could not add public tweet to ZSET');
+
+      expect(mockRedisClient.zadd).toHaveBeenCalled();
+      expect(mockRedisClient.expire).toHaveBeenCalledTimes(0);
+    });
+  });
+
   describe('addPublicViewableTweetToZSet', () => {
     it('should add a public tweet to the ZSET with the correct score and value', async () => {
       const tweetId = '12345';
