@@ -194,9 +194,23 @@ export class TweetsService {
 
       privateTweetCachedItems = [...privateTweetCachedItems, ...fetchedItems];
     }
+
+    const userSelfCreatedTweetCachedItems =
+      await this.CacheService.paginateUserCreatedTweetIds(
+        userId,
+        fromStamp,
+        toStamp,
+        offset,
+        limit,
+      );
+
     // Combine and deduplicate tweet IDs
     const allTweetCachedItems = [
-      ...new Set([...publicTweetCachedItems, ...privateTweetCachedItems]),
+      ...new Set([
+        ...publicTweetCachedItems,
+        ...privateTweetCachedItems,
+        ...userSelfCreatedTweetCachedItems,
+      ]),
     ];
 
     // Create a map to filter out duplicate items by id

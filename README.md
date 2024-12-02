@@ -48,6 +48,10 @@ The newly created group's ID is then assigned to the tweet's permissions. This a
 - The application includes comprehensive unit tests, accounting for errors and exceptions from lower-level infrastructure. For convenience, errors and exceptions that meet the test expectations and do not cause test failures are suppressed using the `--silent` option configured in the test script of `package.json`.
 If you'd like to view the full logs, you can either remove the `--silent` option or run the unit tests manually.
 
+- This application fetches tweets for the feed solely from the cache layer to ensure scalability, avoiding direct database queries for every user feed. The caches are populated through the `UpdateTweetPermissions` process. Additionally, when a new tweet is created, the caches related to the author are updated to include the user's self-created content.
+
+In the event that Redis caches are cleared (e.g., the database is flushed), the cache structures must be recreated. To address this, cache-warming console commands are needed, along with some changes in the code to query the database for data when the cache is empty. This part has not been implemented due to time constraints. However, during regular testing, there should be no issues, as the cache is populated as expected.
+
 ### Future Enhancements
 
 In the future, the list of user-created groups can be displayed in the UI to avoid repeatedly creating groups with the same users or items. Additionally, server-side logic can be implemented to detect and prevent the creation of duplicate groups. If a user attempts to create a group with identical members to an existing one, the system could

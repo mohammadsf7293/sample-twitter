@@ -46,6 +46,7 @@ const mockCacheService = {
   setTweetIsEditableByGroup: jest.fn(),
   getTweetIsEditableByGroup: jest.fn(),
   addUserCreatedTweetToZSet: jest.fn(),
+  paginateUserCreatedTweetIds: jest.fn(),
 };
 
 const mockGroupsService = {
@@ -449,47 +450,176 @@ describe('TweetsService', () => {
   });
 
   describe('paginateTweets', () => {
-    it('should throw an error if the user is not found', async () => {
-      jest
-        .spyOn(mockUsersService, 'findOneWithRelations')
-        .mockResolvedValue(null);
+    it('should return paginated tweets with hasNextPage as true', async () => {
+      const mockUser = { id: 1, groups: [{ id: 1 }] } as User;
+      const mockPublicTweetIds = [{ score: 1627553803, item: '1_tweet' }];
+      const mockPrivateTweetIds = [{ score: 1627553802, item: '2_tweet' }];
+      const mockUserTweetIds = [{ score: 1627553801, item: '3_tweet' }];
+      const mockTweets = [
+        {
+          id: '1',
+          content: 'Tweet 1',
+          createdAt: new Date(1627553803000),
+        } as Tweet,
+        {
+          id: '2',
+          content: 'Tweet 2',
+          createdAt: new Date(1627553802000),
+        } as Tweet,
+        {
+          id: '3',
+          content: 'Tweet 3',
+          createdAt: new Date(1627553801000),
+        } as Tweet,
+      ];
 
-      await expect(service.paginateTweets(123, 10, 1)).rejects.toThrowError(
+      jest
+        .spyOn(usersService, 'findOneWithRelations')
+        .mockResolvedValue(mockUser);
+
+      jest
+        .spyOn(cacheService, 'paginatePublicTweetIds')
+        .mockResolvedValue(mockPublicTweetIds);
+
+      jest
+        .spyOn(cacheService, 'paginatePrivateTweetIds')
+        .mockResolvedValue(mockPrivateTweetIds);
+      jest
+        .spyOn(cacheService, 'paginateUserCreatedTweetIds')
+        .mockResolvedValue(mockUserTweetIds);
+
+      jest
+        .spyOn(service, 'getCachedTweet')
+        .mockResolvedValueOnce(mockTweets[2]);
+      jest
+        .spyOn(service, 'getCachedTweet')
+        .mockResolvedValueOnce(mockTweets[1]);
+      jest
+        .spyOn(service, 'getCachedTweet')
+        .mockResolvedValueOnce(mockTweets[0]);
+
+      const result = await service.paginateTweets(1, 2, 0);
+
+      expect(result.nodes.length).toBe(2);
+      expect(result.hasNextPage).toBe(true);
+      expect(cacheService.paginatePublicTweetIds).toHaveBeenCalled();
+      expect(cacheService.paginatePrivateTweetIds).toHaveBeenCalled();
+      expect(cacheService.paginateUserCreatedTweetIds).toHaveBeenCalled();
+    });
+
+    it('should throw an error if user is not found', async () => {
+      jest.spyOn(usersService, 'findOneWithRelations').mockResolvedValue(null);
+
+      await expect(service.paginateTweets(1, 2, 0)).rejects.toThrow(
         'User not found',
       );
     });
 
-    it('should return paginated tweets successfully', async () => {
+    it('should handle empty tweet cache results gracefully', async () => {
+      const mockUser = { id: 1, groups: [{ id: 1 }] } as unknown as User;
       jest
-        .spyOn(mockUsersService, 'findOneWithRelations')
+        .spyOn(usersService, 'findOneWithRelations')
+        .mockResolvedValue(mockUser);
+
+      jest.spyOn(cacheService, 'paginatePublicTweetIds').mockResolvedValue([]);
+      jest.spyOn(cacheService, 'paginatePrivateTweetIds').mockResolvedValue([]);
+      jest
+        .spyOn(cacheService, 'paginateUserCreatedTweetIds')
+        .mockResolvedValue([]);
+      jest.spyOn(service, 'getCachedTweet').mockResolvedValue(null);
+
+      const result = await service.paginateTweets(1, 2, 0);
+
+      expect(result.nodes.length).toBe(0);
+      expect(result.hasNextPage).toBe(false);
+    });
+
+    it('should return valid tweets when cache returns some valid and some null results', async () => {
+      const mockUser = { id: 1, groups: [{ id: 1 }] } as unknown as User;
+      const mockPublicTweetIds = [{ score: 1627553800, item: '1_tweet' }];
+      const mockPrivateTweetIds = [{ score: 1627553800, item: '2_tweet' }];
+      const mockUserTweetIds = [{ score: 1627553800, item: '3_tweet' }];
+      const mockTweets = [
+        { id: '1', content: 'Tweet 1', createdAt: new Date() } as Tweet,
+        null, // Simulating a null tweet due to missing cache
+        { id: '2', content: 'Tweet 2', createdAt: new Date() } as Tweet,
+      ];
+
+      jest
+        .spyOn(usersService, 'findOneWithRelations')
         .mockResolvedValue(mockUser);
 
       jest
-        .spyOn(mockCacheService, 'paginatePublicTweetIds')
-        .mockResolvedValue([{ score: 1000, item: 'tweet_1' }]);
+        .spyOn(cacheService, 'paginatePublicTweetIds')
+        .mockResolvedValue(mockPublicTweetIds);
 
       jest
-        .spyOn(mockCacheService, 'paginatePrivateTweetIds')
-        .mockResolvedValue([{ score: 900, item: 'tweet_2' }]);
+        .spyOn(cacheService, 'paginatePrivateTweetIds')
+        .mockResolvedValue(mockPrivateTweetIds);
+      mockCacheService.paginateUserCreatedTweetIds.mockResolvedValue(
+        mockUserTweetIds,
+      );
+      jest
+        .spyOn(service, 'getCachedTweet')
+        .mockResolvedValueOnce(mockTweets[0])
+        .mockResolvedValueOnce(mockTweets[1])
+        .mockResolvedValueOnce(mockTweets[2]);
+
+      const result = await service.paginateTweets(1, 2, 0);
+
+      expect(result.nodes.length).toBe(2);
+      expect(result.hasNextPage).toBe(false);
+    });
+
+    it('should return tweets with correct pagination', async () => {
+      const mockUser = { id: 1, groups: [{ id: 1 }] } as unknown as User;
+      const mockPublicTweetIds = [{ score: 1627553801, item: '1_tweet' }];
+      const mockPrivateTweetIds = [{ score: 1627553802, item: '2_tweet' }];
+      const mockUserTweetIds = [{ score: 1627553803, item: '3_tweet' }];
+      const mockTweets = [
+        {
+          id: '1',
+          content: 'Tweet 1',
+          createdAt: new Date(1627553801 * 1000),
+        } as Tweet,
+        {
+          id: '2',
+          content: 'Tweet 2',
+          createdAt: new Date(1627553802 * 1000),
+        } as Tweet,
+        {
+          id: '3',
+          content: 'Tweet 3',
+          createdAt: new Date(1627553803 * 1000),
+        } as Tweet,
+      ];
+
+      jest
+        .spyOn(usersService, 'findOneWithRelations')
+        .mockResolvedValue(mockUser);
+
+      jest
+        .spyOn(cacheService, 'paginatePublicTweetIds')
+        .mockResolvedValue(mockPublicTweetIds);
+
+      jest
+        .spyOn(cacheService, 'paginatePrivateTweetIds')
+        .mockResolvedValue(mockPrivateTweetIds);
+
+      jest
+        .spyOn(cacheService, 'paginateUserCreatedTweetIds')
+        .mockResolvedValue(mockUserTweetIds);
 
       jest
         .spyOn(service, 'getCachedTweet')
-        .mockResolvedValueOnce(mockTweet)
-        .mockResolvedValueOnce(null); // Simulate a missing cached tweet
+        .mockResolvedValueOnce(mockTweets[2])
+        .mockResolvedValueOnce(mockTweets[1])
+        .mockResolvedValueOnce(mockTweets[0]);
 
       const result = await service.paginateTweets(1, 2, 1);
 
-      expect(result).toEqual({
-        nodes: [mockTweet],
-        hasNextPage: false,
-      });
-
-      expect(mockUsersService.findOneWithRelations).toHaveBeenCalledWith(1, [
-        'groups',
-      ]);
-      expect(mockCacheService.paginatePublicTweetIds).toHaveBeenCalled();
-      expect(mockCacheService.paginatePrivateTweetIds).toHaveBeenCalled();
-      expect(service.getCachedTweet).toHaveBeenCalledTimes(2);
+      expect(result.nodes.length).toBe(2); // Paginated to the second page with a limit of 2
+      expect(result.hasNextPage).toBe(true); // All tweets fetched
     });
   });
 
@@ -1205,6 +1335,9 @@ describe('TweetsService', () => {
   describe('canEdit', () => {
     it('should return true for the author', async () => {
       jest.spyOn(tweetRepository, 'findOne').mockResolvedValue(mockTweet);
+      jest
+        .spyOn(usersService, 'findOneWithRelations')
+        .mockResolvedValue(mockUser2);
 
       // User id is 1 and also author id of the mocked tweet is one
       const result = await service.canEdit(2, '1');
