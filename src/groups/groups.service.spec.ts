@@ -3,8 +3,6 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { Group } from './group.entity';
 import { GroupsService } from './groups.service';
 import { In, Repository } from 'typeorm';
-import { User } from '../users/user.entity';
-import { CreateGroupDto } from './dto/create-group.dto';
 import { UsersService } from '../users/users.service';
 
 // Mock data for users and groups

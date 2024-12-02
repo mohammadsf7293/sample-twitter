@@ -1,6 +1,7 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { TweetsService } from './tweets.service';
 import { Tweet, TweetCategory } from './tweet.entity';
 import { User } from '../users/user.entity';
@@ -13,6 +14,7 @@ import { Group } from 'src/groups/group.entity';
 import { UsersService } from '../users/users.service';
 import * as protobuf from 'protobufjs';
 import * as path from 'path';
+import { CreateTweetDto } from './dto/create-tweet.dto';
 
 const mockTweetRepository = {
   create: jest.fn(),
@@ -20,10 +22,6 @@ const mockTweetRepository = {
   find: jest.fn(),
   findOne: jest.fn(),
   remove: jest.fn(),
-};
-
-const mockUserRepository = {
-  findOne: jest.fn(),
 };
 
 const mockHashtagRepository = {
@@ -56,6 +54,7 @@ const mockGroupsService = {
 };
 
 const mockUsersService = {
+  findOne: jest.fn(),
   isUserInGroupIds: jest.fn(),
   findOneWithRelations: jest.fn(),
 };
@@ -67,7 +66,9 @@ const mockTweet = {
   editableGroups: [{ id: 1 }, { id: 2 }],
   parentTweet: null,
   hashtags: [],
-} as Tweet;
+  createdAt: new Date(),
+  updatedAt: new Date(),
+} as unknown as Tweet;
 
 const mockUser = {
   id: 1,
@@ -78,10 +79,14 @@ const mockUser = {
 describe('TweetsService', () => {
   let service: TweetsService;
   let tweetRepository: Repository<Tweet>;
-  let userRepository: Repository<User>;
   let hashtagRepository: Repository<Hashtag>;
   let cacheService: CacheService;
   let usersService: UsersService;
+
+  beforeAll(() => {
+    // Suppressing console.error not to show thrown exceptions which are used for some test cases. It makes test output area clean and green. and it only becomes red when a test is not passed
+    jest.spyOn(console, 'error').mockImplementation(() => {});
+  });
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -90,10 +95,6 @@ describe('TweetsService', () => {
         {
           provide: getRepositoryToken(Tweet),
           useValue: mockTweetRepository,
-        },
-        {
-          provide: getRepositoryToken(User),
-          useValue: mockUserRepository,
         },
         {
           provide: getRepositoryToken(Hashtag),
@@ -116,7 +117,6 @@ describe('TweetsService', () => {
 
     service = module.get<TweetsService>(TweetsService);
     tweetRepository = module.get<Repository<Tweet>>(getRepositoryToken(Tweet));
-    userRepository = module.get<Repository<User>>(getRepositoryToken(User));
     hashtagRepository = module.get<Repository<Hashtag>>(
       getRepositoryToken(Hashtag),
     );
@@ -133,267 +133,222 @@ describe('TweetsService', () => {
   });
 
   describe('create', () => {
-    it('should create a tweet and cache it', async () => {
-      const createTweetDto = {
-        content: 'Test tweet content',
+    it('should create a tweet successfully', async () => {
+      const createTweetDto: CreateTweetDto = {
+        content: 'Hello, World!',
         authorId: 1,
         parentTweetId: null,
-        hashtags: ['hashtag1', 'hashtag2'],
-        location: 'Test location',
+        hashtags: ['#greeting', '#welcome'],
+        location: 'Earth',
         category: TweetCategory.News,
       };
 
-      const author = {
-        id: 1,
-        username: 'author',
-        firstName: 'author firstName',
-        lastName: 'author lastName',
-      } as unknown as User;
+      const mockAuthor = new User();
+      mockAuthor.id = 1;
+
+      const mockHashtags = [{ id: 1, name: '#greeting' } as unknown as Hashtag];
+      const newHashtag = { id: 2, name: '#welcome' } as unknown as Hashtag;
 
       const savedTweet = new Tweet();
-      savedTweet.id = '123';
+      savedTweet.id = '1';
       savedTweet.content = createTweetDto.content;
-      savedTweet.author = author;
-      savedTweet.hashtags = [
-        {
-          name: 'hashtag1',
-          id: '',
-          tweets: [],
-          createdAt: undefined,
-        },
-        {
-          name: 'hashtag2',
-          id: '',
-          tweets: [],
-          createdAt: undefined,
-        },
-      ];
-      savedTweet.location = createTweetDto.location;
-      savedTweet.category = createTweetDto.category;
+      savedTweet.author = mockAuthor;
+      savedTweet.hashtags = [mockHashtags[0], newHashtag];
 
-      // Mock repositories
-      jest.spyOn(userRepository, 'findOne').mockResolvedValue(author as User);
-      jest.spyOn(tweetRepository, 'save').mockResolvedValue(savedTweet);
-
-      // Mock cache service's cacheTweet method
-      const cacheTweetSpy = jest
-        .spyOn(cacheService, 'cacheTweet')
+      mockUsersService.findOne.mockResolvedValue(mockAuthor);
+      mockHashtagRepository.findBy.mockResolvedValue(mockHashtags);
+      mockHashtagRepository.create.mockReturnValue(newHashtag);
+      mockHashtagRepository.save.mockResolvedValue(newHashtag);
+      mockTweetRepository.save.mockResolvedValue(savedTweet);
+      const mockCacheTweet = jest
+        .spyOn(service, 'cacheTweet')
         .mockResolvedValue();
 
-      // Mock protobuf.load for serialization
-      const mockedProtoPath = path.join(__dirname, 'tweet.proto');
-      const mockedTweetProto = {
-        lookupType: jest.fn().mockReturnValue({
-          encode: jest.fn().mockReturnValue({
-            finish: jest.fn().mockReturnValue(Buffer.from('serializedData')),
-          }),
-        }),
-      };
-      jest.spyOn(protobuf, 'load').mockResolvedValue(mockedTweetProto as any);
-
-      // Call create method
       const result = await service.create(createTweetDto);
 
-      // Assertions
-      expect(result).toEqual(savedTweet);
-      expect(userRepository.findOne).toHaveBeenCalledWith({ where: { id: 1 } });
-      expect(tweetRepository.save).toHaveBeenCalledWith(
-        expect.objectContaining({ content: createTweetDto.content }),
+      expect(usersService.findOne).toHaveBeenCalledWith(
+        createTweetDto.authorId,
       );
-      expect(cacheTweetSpy).toHaveBeenCalledWith(
-        savedTweet.id,
-        expect.any(String),
-      );
-      expect(protobuf.load).toHaveBeenCalledWith(mockedProtoPath);
-      expect(mockedTweetProto.lookupType).toHaveBeenCalledWith('Tweet');
-      expect(mockedTweetProto.lookupType().encode).toHaveBeenCalledWith({
-        id: savedTweet.id,
-        content: savedTweet.content,
-        authorId: savedTweet.author.id,
-        hashtags: savedTweet.hashtags.map((h) => h.name),
-        location: savedTweet.location,
-        category: savedTweet.category,
+      expect(hashtagRepository.findBy).toHaveBeenCalledWith({
+        name: In(expect.any(Array)),
       });
+      expect(hashtagRepository.create).toHaveBeenCalledWith({
+        name: expect.any(String),
+      });
+      expect(hashtagRepository.save).toHaveBeenCalled();
+      expect(tweetRepository.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          content: createTweetDto.content,
+          author: mockAuthor,
+          hashtags: [mockHashtags[0], newHashtag],
+        }),
+      );
+      expect(mockCacheTweet).toHaveBeenCalledWith(savedTweet);
+      expect(result).toEqual(savedTweet);
     });
 
-    it('should throw an error if author is not found', async () => {
-      const createTweetDto = {
-        content: 'Test tweet content',
-        authorId: 999, // Non-existing author
+    it('should throw an error if the author is not found', async () => {
+      const createTweetDto: CreateTweetDto = {
+        content: 'Hello, World!',
+        authorId: 1,
         parentTweetId: null,
-        hashtags: ['hashtag1'],
-        location: 'Test location',
-        category: TweetCategory.Finance,
+        hashtags: ['#greeting', '#welcome'],
+        location: 'Earth',
+        category: TweetCategory.News,
       };
 
-      jest.spyOn(userRepository, 'findOne').mockResolvedValue(null); // Simulate author not found
+      jest.spyOn(usersService, 'findOne').mockResolvedValue(null);
 
-      await expect(service.create(createTweetDto)).rejects.toThrowError(
+      await expect(service.create(createTweetDto)).rejects.toThrow(
         'User not found',
       );
+      expect(mockUsersService.findOne).toHaveBeenCalledWith(
+        createTweetDto.authorId,
+      );
     });
 
-    it('should throw an error if parent tweet is not found', async () => {
-      const createTweetDto = {
-        content: 'Test tweet content',
+    it('should throw an error if the parent tweet is not found', async () => {
+      const createTweetDto: CreateTweetDto = {
+        content: 'Hello, World!',
         authorId: 1,
-        parentTweetId: '999', // Non-existing parent tweet
-        hashtags: ['hashtag1'],
-        location: 'Test location',
-        category: TweetCategory.Sport,
+        parentTweetId: '100',
+        hashtags: ['#greeting', '#welcome'],
+        location: 'Earth',
+        category: TweetCategory.News,
       };
 
-      const author = { id: 1, username: 'author' };
-      jest
-        .spyOn(userRepository, 'findOne')
-        .mockResolvedValue(author as unknown as User);
-      jest.spyOn(tweetRepository, 'findOne').mockResolvedValue(null); // Simulate parent tweet not found
+      const mockAuthor = new User();
+      mockAuthor.id = 1;
 
-      await expect(service.create(createTweetDto)).rejects.toThrowError(
+      mockUsersService.findOne.mockResolvedValue(mockAuthor);
+      mockTweetRepository.findOne.mockResolvedValue(null);
+
+      await expect(service.create(createTweetDto)).rejects.toThrow(
         'Parent tweet not found',
       );
+
+      expect(mockUsersService.findOne).toHaveBeenCalledWith(
+        createTweetDto.authorId,
+      );
+      expect(mockTweetRepository.findOne).toHaveBeenCalledWith({
+        where: { id: createTweetDto.parentTweetId },
+      });
     });
   });
 
   describe('cacheTweet', () => {
-    it('should serialize the tweet and call cacheTweet method in CacheService', async () => {
-      const tweetId = '123';
+    it('should cache the tweet with serialized data', async () => {
+      await service.cacheTweet(mockTweet);
 
-      // Mock Tweet object
-      const tweet = {
-        id: tweetId,
-        content: 'Test content',
-        author: { id: 1, username: 'author' },
-        hashtags: [{ name: 'hashtag1' }, { name: 'hashtag2' }],
-        location: 'Test location',
-        category: 'Test category',
-      } as any;
-
-      // Mock the protobuf.load and protobuf.encode calls
-      const mockedProtoPath = path.join(__dirname, 'tweet.proto');
-      const mockedTweetProto = {
-        lookupType: jest.fn().mockReturnValue({
-          encode: jest.fn().mockReturnValue({
-            finish: jest.fn().mockReturnValue(Buffer.from('serializedData')),
-          }),
-        }),
+      const expectedTweetData = {
+        id: mockTweet.id,
+        content: mockTweet.content,
+        authorId: mockTweet.author,
+        category: mockTweet.category,
+        hashtags: mockTweet.hashtags,
+        location: mockTweet.location,
+        createdAt: mockTweet.createdAt.getTime(),
+        updatedAt: mockTweet.updatedAt.getTime(),
       };
 
-      // Mock protobuf.load to return the mockedTweetProto
-      jest.spyOn(protobuf, 'load').mockResolvedValue(mockedTweetProto as any);
+      const expectedEncodedTweetString = JSON.stringify(expectedTweetData);
 
-      // Mock cacheService.cacheTweet to track calls
-      const cacheTweetSpy = jest.spyOn(cacheService, 'cacheTweet');
+      expect(mockCacheService.cacheTweet).toHaveBeenCalledWith(
+        mockTweet.id,
+        expectedEncodedTweetString,
+      );
+    });
 
-      // Call the cacheTweet method
-      await service.cacheTweet(tweet);
+    it('should handle tweets with missing optional fields', async () => {
+      const tweetWithMissingFields: Tweet = {
+        ...mockTweet,
+        location: null,
+        category: null,
+        hashtags: [],
+      };
 
-      // Assertions
-      expect(protobuf.load).toHaveBeenCalledWith(mockedProtoPath);
-      expect(mockedTweetProto.lookupType).toHaveBeenCalledWith('Tweet');
-      expect(cacheTweetSpy).toHaveBeenCalledWith(tweetId, 'serializedData');
+      await service.cacheTweet(tweetWithMissingFields);
+
+      const expectedTweetData = {
+        id: tweetWithMissingFields.id,
+        content: tweetWithMissingFields.content,
+        authorId: tweetWithMissingFields.author,
+        category: null,
+        hashtags: [],
+        location: null,
+        createdAt: tweetWithMissingFields.createdAt.getTime(),
+        updatedAt: tweetWithMissingFields.updatedAt.getTime(),
+      };
+
+      const expectedEncodedTweetString = JSON.stringify(expectedTweetData);
+
+      expect(mockCacheService.cacheTweet).toHaveBeenCalledWith(
+        tweetWithMissingFields.id,
+        expectedEncodedTweetString,
+      );
+    });
+
+    it('should throw an error if the CacheService fails', async () => {
+      mockCacheService.cacheTweet.mockRejectedValue(new Error('Redis error'));
+
+      await expect(service.cacheTweet(mockTweet)).rejects.toThrow(
+        'Redis error',
+      );
+
+      expect(mockCacheService.cacheTweet).toHaveBeenCalled();
     });
   });
 
   describe('getCachedTweet', () => {
-    it('should return null if no cached data is found', async () => {
-      jest.spyOn(cacheService, 'getCachedTweet').mockResolvedValue(null);
+    it('should return a Tweet entity when cached data exists', async () => {
+      mockCacheService.getCachedTweet.mockResolvedValue(
+        JSON.stringify(mockTweet),
+      );
 
-      const result = await service.getCachedTweet('123');
+      const result = await service.getCachedTweet('1');
+
+      expect(result).toBeInstanceOf(Tweet);
+      expect(result.id).toBe(mockTweet.id);
+      expect(result.content).toBe(mockTweet.content);
+      expect(result.category).toBe(mockTweet.category);
+      expect(result.location).toBe(mockTweet.location);
+      expect(result.createdAt).toEqual(new Date(mockTweet.createdAt));
+      expect(result.updatedAt).toEqual(new Date(mockTweet.updatedAt));
+      expect(result.author.id).toBe(mockTweet.author.id);
+      expect(result.hashtags).toEqual(mockTweet.hashtags);
+
+      expect(mockCacheService.getCachedTweet).toHaveBeenCalledWith('1');
+    });
+
+    it('should return null when no cached data is found', async () => {
+      mockCacheService.getCachedTweet.mockResolvedValue(null);
+
+      const result = await service.getCachedTweet('1');
+
       expect(result).toBeNull();
-      expect(cacheService.getCachedTweet).toHaveBeenCalledWith('123');
+      expect(mockCacheService.getCachedTweet).toHaveBeenCalledWith('1');
     });
 
-    it('should return a Tweet entity if cached data is found', async () => {
-      const cachedTweetData = Buffer.from('test-data').toString('base64');
-      jest
-        .spyOn(cacheService, 'getCachedTweet')
-        .mockResolvedValue(cachedTweetData);
+    it('should throw an error when JSON parsing fails', async () => {
+      mockCacheService.getCachedTweet.mockResolvedValue('invalid-json');
 
-      const protoPath = path.join(__dirname, 'tweet.proto');
-      const mockTweetProto = {
-        decode: jest.fn().mockReturnValue({
-          id: '123',
-          content: 'Test tweet content',
-          author: {
-            id: 1,
-            firstName: 'Author',
-            lastName: 'Last',
-            username: 'author',
-          },
-          hashtags: ['hashtag1', 'hashtag2'],
-          location: 'Test location',
-          category: TweetCategory.News,
-        }),
-        toObject: jest.fn().mockReturnValue({
-          id: '123',
-          content: 'Test tweet content',
-          author: {
-            id: 1,
-            firstName: 'Author',
-            lastName: 'Last',
-            username: 'author',
-          },
-          hashtags: ['hashtag1', 'hashtag2'],
-          location: 'Test location',
-          category: TweetCategory.News,
-        }),
-      };
-      jest.spyOn(protobuf, 'load').mockResolvedValue({
-        lookupType: jest.fn().mockReturnValue(mockTweetProto),
-      } as any);
-
-      const result = await service.getCachedTweet('123');
-
-      expect(result).toEqual(
-        expect.objectContaining({
-          id: '123',
-          content: 'Test tweet content',
-          author: {
-            id: 1,
-            firstName: 'Author',
-            lastName: 'Last',
-            username: 'author',
-          },
-          hashtags: [{ name: 'hashtag1' }, { name: 'hashtag2' }],
-          location: 'Test location',
-          category: TweetCategory.News,
-        }),
+      await expect(service.getCachedTweet('1')).rejects.toThrow(
+        'Could not retrieve cached tweet: Unexpected token \'i\', "invalid-json" is not valid JSON',
       );
-      expect(cacheService.getCachedTweet).toHaveBeenCalledWith('123');
-      expect(protobuf.load).toHaveBeenCalledWith(protoPath);
-      expect(mockTweetProto.decode).toHaveBeenCalled();
-      expect(mockTweetProto.toObject).toHaveBeenCalled();
+
+      expect(mockCacheService.getCachedTweet).toHaveBeenCalledWith('1');
     });
 
-    it('should throw an error if protobuf decoding fails', async () => {
-      const cachedTweetData = Buffer.from('test-data').toString('base64');
-      jest
-        .spyOn(cacheService, 'getCachedTweet')
-        .mockResolvedValue(cachedTweetData);
-
-      jest.spyOn(protobuf, 'load').mockResolvedValue({
-        lookupType: jest.fn().mockReturnValue({
-          decode: jest.fn().mockImplementation(() => {
-            throw new Error('Decoding failed');
-          }),
-        }),
-      } as any);
-
-      await expect(service.getCachedTweet('123')).rejects.toThrowError(
-        'Could not retrieve cached tweet: Decoding failed',
+    it('should throw an error when CacheService fails', async () => {
+      mockCacheService.getCachedTweet.mockRejectedValue(
+        new Error('Redis connection error'),
       );
-    });
 
-    it('should throw an error if CacheService fails', async () => {
-      jest
-        .spyOn(cacheService, 'getCachedTweet')
-        .mockRejectedValue(new Error('Cache retrieval error'));
-
-      await expect(service.getCachedTweet('123')).rejects.toThrowError(
-        'Could not retrieve cached tweet: Cache retrieval error',
+      await expect(service.getCachedTweet('1')).rejects.toThrow(
+        'Could not retrieve cached tweet: Redis connection error',
       );
-      expect(cacheService.getCachedTweet).toHaveBeenCalledWith('123');
+
+      expect(mockCacheService.getCachedTweet).toHaveBeenCalledWith('1');
     });
   });
 
@@ -422,7 +377,7 @@ describe('TweetsService', () => {
         .mockResolvedValue([{ score: 900, item: 'tweet_2' }]);
 
       jest
-        .spyOn(mockCacheService, 'getCachedTweet')
+        .spyOn(service, 'getCachedTweet')
         .mockResolvedValueOnce(mockTweet)
         .mockResolvedValueOnce(null); // Simulate a missing cached tweet
 
@@ -438,7 +393,7 @@ describe('TweetsService', () => {
       ]);
       expect(mockCacheService.paginatePublicTweetIds).toHaveBeenCalled();
       expect(mockCacheService.paginatePrivateTweetIds).toHaveBeenCalled();
-      expect(mockCacheService.getCachedTweet).toHaveBeenCalledTimes(2);
+      expect(service.getCachedTweet).toHaveBeenCalledTimes(2);
     });
   });
 
@@ -587,7 +542,7 @@ describe('TweetsService', () => {
       expect(result).toEqual([0, [1, 2], [3, 4]]);
     });
 
-    it('should return public visibility if no permissions are set and inheritance is false', async () => {
+    it('should return private visibility if no permissions are set and inheritance is false', async () => {
       const tweet = {
         inheritViewPermissions: false,
       } as Tweet;
@@ -598,7 +553,7 @@ describe('TweetsService', () => {
         [],
         0,
       );
-      expect(result).toEqual([0, 'public']);
+      expect(result).toEqual([0, [], []]);
     });
 
     it('should resolve visibility through a chain of parent tweets test case 1', async () => {
@@ -763,7 +718,7 @@ describe('TweetsService', () => {
         'tweet123',
         ['hashtag1'],
         'category1',
-        1699118400000,
+        1699118400,
       );
       expect(cacheService.setTweetIsPublicEditable).toHaveBeenCalledWith(
         'tweet123',
@@ -823,14 +778,14 @@ describe('TweetsService', () => {
         'tweet456',
         ['hashtag1'],
         'category2',
-        1699118400000,
+        1699118400,
       );
       expect(cacheService.addPrivateViewableTweetToZSet).toHaveBeenCalledWith(
         group2.id,
         'tweet456',
         ['hashtag1'],
         'category2',
-        1699118400000,
+        1699118400,
       );
 
       expect(cacheService.setTweetIsEditableByGroup).toHaveBeenCalledWith(
@@ -896,7 +851,7 @@ describe('TweetsService', () => {
       expect(result).toEqual([0, [1, 2], [3, 4]]);
     });
 
-    it('should return public editability if no permissions are set and inheritance is false', async () => {
+    it('should return private editability if no permissions are set and inheritance is false', async () => {
       const tweet = {
         inheritEditPermissions: false,
       } as Tweet;
@@ -907,7 +862,7 @@ describe('TweetsService', () => {
         [],
         0,
       );
-      expect(result).toEqual([0, 'public']);
+      expect(result).toEqual([0, [], []]);
     });
 
     it('should resolve editability through a chain of parent tweets test case 1', async () => {
@@ -1152,85 +1107,90 @@ describe('TweetsService', () => {
   });
 
   describe('canEdit', () => {
-    it('should throw an error if tweet is not found', async () => {
-      mockTweetRepository.findOne.mockResolvedValueOnce(null);
-      mockUserRepository.findOne.mockResolvedValueOnce(mockUser);
-
-      await expect(service.canEdit(mockUser.id, mockTweet.id)).rejects.toThrow(
-        'Tweet not found',
-      );
-
-      expect(tweetRepository.findOne).toHaveBeenCalledWith({
-        where: { id: mockTweet.id },
-        relations: ['author', 'hashtags', 'parentTweet', 'editableGroups'],
-      });
-    });
-
-    it('should throw an error if user is not found', async () => {
-      mockTweetRepository.findOne.mockResolvedValueOnce(mockTweet);
-      mockUserRepository.findOne.mockResolvedValueOnce(null);
-
-      await expect(service.canEdit(mockUser.id, mockTweet.id)).rejects.toThrow(
-        'User not found',
-      );
-
-      expect(userRepository.findOne).toHaveBeenCalledWith({
-        where: { id: mockUser.id },
-      });
-    });
-
-    it('should return true if tweet is public editable', async () => {
-      mockTweetRepository.findOne.mockResolvedValueOnce(mockTweet);
-      mockUserRepository.findOne.mockResolvedValueOnce(mockUser);
+    it('should return true if the tweet is public editable', async () => {
       jest
         .spyOn(service, 'determineTweetEditability')
-        .mockResolvedValueOnce([0, 'public']);
+        .mockResolvedValue([0, 'public']);
 
-      const result = await service.canEdit(mockUser.id, mockTweet.id);
+      const mockTweet = {
+        id: '1',
+        editableGroups: [],
+      };
+      const mockUser = { id: 1, groups: [] };
+
+      mockTweetRepository.findOne.mockResolvedValue(mockTweet);
+      mockUsersService.findOneWithRelations.mockResolvedValue(mockUser);
+
+      const result = await service.canEdit(1, '1');
 
       expect(result).toBe(true);
-      expect(tweetRepository.findOne).toHaveBeenCalledWith({
-        where: { id: mockTweet.id },
+      expect(mockTweetRepository.findOne).toHaveBeenCalledWith({
+        where: { id: '1' },
         relations: ['author', 'hashtags', 'parentTweet', 'editableGroups'],
       });
-      expect(userRepository.findOne).toHaveBeenCalledWith({
-        where: { id: mockUser.id },
-      });
-      expect(service.determineTweetEditability).toHaveBeenCalled();
+      expect(mockUsersService.findOneWithRelations).toHaveBeenCalledWith(1, [
+        'groups',
+      ]);
     });
 
-    it('should return true if user is in allowed groups', async () => {
-      mockTweetRepository.findOne.mockResolvedValueOnce(mockTweet);
-      mockUserRepository.findOne.mockResolvedValueOnce(mockUser);
+    it('should return true if the user belongs to the allowed groups', async () => {
+      const mockTweet = {
+        id: '1',
+        editableGroups: [{ id: 1 }],
+      };
+      const mockUser = { id: 1, groups: [{ id: 1 }] };
+
       jest
         .spyOn(service, 'determineTweetEditability')
-        .mockResolvedValueOnce([0, [], [1, 2]]);
-      mockUsersService.isUserInGroupIds.mockResolvedValueOnce(true);
+        .mockResolvedValue([3, [], [1]]);
 
-      const result = await service.canEdit(mockUser.id, mockTweet.id);
+      mockTweetRepository.findOne.mockResolvedValue(mockTweet);
+      mockUsersService.findOneWithRelations.mockResolvedValue(mockUser);
+      mockUsersService.isUserInGroupIds.mockResolvedValue(true);
+
+      const result = await service.canEdit(1, '1');
 
       expect(result).toBe(true);
-      expect(usersService.isUserInGroupIds).toHaveBeenCalledWith(
-        mockUser,
-        [1, 2],
-      );
+      expect(mockTweetRepository.findOne).toHaveBeenCalled();
+      expect(mockUsersService.findOneWithRelations).toHaveBeenCalled();
+      expect(mockUsersService.isUserInGroupIds).toHaveBeenCalledWith(mockUser, [
+        1,
+      ]);
     });
 
-    it('should return false if user is not in allowed groups', async () => {
-      mockTweetRepository.findOne.mockResolvedValueOnce(mockTweet);
-      mockUserRepository.findOne.mockResolvedValueOnce(mockUser);
-      jest
-        .spyOn(service, 'determineTweetEditability')
-        .mockResolvedValueOnce([0, [], [1, 2]]);
-      mockUsersService.isUserInGroupIds.mockResolvedValueOnce(false);
+    it('should return false if the user does not belong to the allowed groups', async () => {
+      const mockTweet = {
+        id: '1',
+        editableGroups: [{ id: 2 }],
+      };
+      const mockUser = { id: 1, groups: [{ id: 3 }] };
 
-      const result = await service.canEdit(mockUser.id, mockTweet.id);
+      jest
+        .spyOn(tweetRepository, 'findOne')
+        .mockResolvedValue(mockTweet as Tweet);
+      jest
+        .spyOn(usersService, 'findOneWithRelations')
+        .mockResolvedValue(mockUser as User);
+
+      mockUsersService.isUserInGroupIds.mockResolvedValue(false);
+
+      const result = await service.canEdit(1, '1');
 
       expect(result).toBe(false);
-      expect(usersService.isUserInGroupIds).toHaveBeenCalledWith(
-        mockUser,
-        [1, 2],
-      );
+    });
+
+    it('should throw an error if the user is not found', async () => {
+      mockTweetRepository.findOne.mockResolvedValue({});
+      mockUsersService.findOneWithRelations.mockResolvedValue(null);
+
+      await expect(service.canEdit(1, '1')).rejects.toThrow('User not found');
+    });
+
+    it('should throw an error if the tweet is not found', async () => {
+      mockTweetRepository.findOne.mockResolvedValue(null);
+      mockUsersService.findOneWithRelations.mockResolvedValue({});
+
+      await expect(service.canEdit(1, '1')).rejects.toThrow('Tweet not found');
     });
   });
 

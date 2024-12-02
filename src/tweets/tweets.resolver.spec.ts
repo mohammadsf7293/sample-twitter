@@ -112,8 +112,8 @@ describe('TweetsResolver', () => {
         parentTweetId: null,
         category: createdTweetEntity.category,
         location: createdTweetEntity.location,
-        createTime: createdTweetEntity.createdAt.getTime(),
-        updateTime: createdTweetEntity.updatedAt.getTime(),
+        createTime: Math.round(createdTweetEntity.createdAt.getTime() / 1000),
+        updateTime: Math.round(createdTweetEntity.updatedAt.getTime() / 1000),
       });
 
       expect(service.create).toHaveBeenCalledWith(createTweetInput);
@@ -247,10 +247,10 @@ describe('TweetsResolver', () => {
       expect(result.nodes[0].id).toBe('1');
       expect(result.nodes[1].id).toBe('2');
       expect(result.nodes[0].createTime).toBe(
-        mockTweets[0].createdAt.getTime(),
-      ); // Check if the timestamp is mapped correctly
+        Math.round(mockTweets[0].createdAt.getTime() / 1000),
+      );
       expect(result.nodes[1].createTime).toBe(
-        mockTweets[1].createdAt.getTime(),
+        Math.round(mockTweets[1].createdAt.getTime() / 1000),
       );
     });
 
@@ -369,7 +369,9 @@ describe('TweetsResolver', () => {
 
       // Ensure the toGraphQLTweet function is invoked and result is mapped correctly
       expect(result.nodes[0].id).toBe('123');
-      expect(result.nodes[0].createTime).toBe(mockTweet.createdAt.getTime());
+      expect(result.nodes[0].createTime).toBe(
+        Math.round(mockTweet.createdAt.getTime() / 1000),
+      );
       expect(result.nodes[0].authorId).toBe('456');
       expect(result.nodes[0].content).toBe('This is a tweet');
     });
@@ -395,8 +397,12 @@ describe('TweetsResolver', () => {
       const result: TweetDTO = (resolver as any).toGraphQLTweet(tweetEntity);
 
       expect(result.id).toBe('123');
-      expect(result.createTime).toBe(tweetEntity.createdAt.getTime()); // Check timestamp
-      expect(result.updateTime).toBe(tweetEntity.updatedAt.getTime()); // Check timestamp
+      expect(result.createTime).toBe(
+        Math.round(tweetEntity.createdAt.getTime() / 1000),
+      );
+      expect(result.updateTime).toBe(
+        Math.round(tweetEntity.updatedAt.getTime() / 1000),
+      );
       expect(result.content).toBe('This is a tweet');
       expect(result.hashtags).toEqual(['#hashtag1', '#hashtag2']); // Check hashtags
       expect(result.parentTweetId).toBeNull(); // Parent tweet is null

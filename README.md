@@ -45,6 +45,9 @@ The newly created group's ID is then assigned to the tweet's permissions. This a
 
 - The application's architecture is inspired by <a target="_blank" href="https://github.com/nestjs/nest/tree/master/sample">samples from the NestJS official repository</a>. However, some design aspects may require improvements, which I have outlined in the `Future Enhancements` section.
 
+- The application includes comprehensive unit tests, accounting for errors and exceptions from lower-level infrastructure. For convenience, errors and exceptions that meet the test expectations and do not cause test failures are suppressed using the `--silent` option configured in the test script of `package.json`.
+If you'd like to view the full logs, you can either remove the `--silent` option or run the unit tests manually.
+
 ### Future Enhancements
 
 In the future, the list of user-created groups can be displayed in the UI to avoid repeatedly creating groups with the same users or items. Additionally, server-side logic can be implemented to detect and prevent the creation of duplicate groups. If a user attempts to create a group with identical members to an existing one, the system could
@@ -54,7 +57,8 @@ In the future, the list of user-created groups can be displayed in the UI to avo
 <p align="center">
  <img src="https://ipfs.io/ipfs/Qmd1xhbQ694WtUvtB56K2HDXCE3jqeHJQQ1f42ic2Z91ax" style="width:45vw;" alt="Cache Architecture" />
 </p>
-I have used this caching design in the `Quiz of Kings` game, and it worked smoothly with over 30 million users and nearly 1 million daily active users.
+
+I have used this caching design in the **Quiz of Kings** game, and it worked smoothly with over 30 million users and nearly 1 million daily active users.
 
 ### Redis Cache
 - **Structure**:

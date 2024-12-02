@@ -128,8 +128,8 @@ export class TweetsService {
       tweetEntity.createdAt = new Date(tweetObject.createdAt);
       tweetEntity.updatedAt = new Date(tweetObject.updatedAt);
 
-      tweetEntity.author = tweetObject.authorId; // Simple mapping for the `author`
-      tweetEntity.hashtags = tweetObject.hashtags; // Mapping hashtags
+      tweetEntity.author = tweetObject.author;
+      tweetEntity.hashtags = tweetObject.hashtags;
 
       return tweetEntity;
     } catch (error) {
@@ -507,7 +507,7 @@ export class TweetsService {
         updatedTweet.id,
         updatedTweet.hashtags.map((hashtag) => hashtag.name),
         updatedTweet.category,
-        updatedTweet.createdAt.getTime() / 1000,
+        Math.round(updatedTweet.createdAt.getTime() / 1000),
       );
     } else {
       updatedTweet.viewableGroups.forEach((group) => {
@@ -516,7 +516,7 @@ export class TweetsService {
           updatedTweet.id,
           updatedTweet.hashtags.map((hashtag) => hashtag.name),
           updatedTweet.category,
-          updatedTweet.createdAt.getTime() / 1000,
+          Math.round(updatedTweet.createdAt.getTime() / 1000),
         );
       });
     }
