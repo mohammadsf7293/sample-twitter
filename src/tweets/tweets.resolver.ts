@@ -1,11 +1,14 @@
 import { Resolver, Query, Mutation, Args } from '@nestjs/graphql';
 import { TweetsService } from './tweets.service';
 import { Tweet } from './tweet.entity';
-import { Tweet as TweetDTO } from 'src/graphql.schema';
+import {
+  FilterTweet,
+  Tweet as TweetDTO,
+  PaginatedTweets,
+} from '../graphql.schema';
 import { CreateTweetDto } from './dto/create-tweet.dto';
 import { UpdateTweetDto } from './dto/update-tweet.dto';
 import { UpdateTweetPermissionsDto } from './dto/update-tweet-permissions.dto';
-import { PaginatedTweets } from '../graphql.schema';
 
 @Resolver(() => Tweet)
 export class TweetsResolver {
@@ -41,11 +44,14 @@ export class TweetsResolver {
     @Args('userId', { type: () => Number }) userId: number,
     @Args('limit', { type: () => Number }) limit: number,
     @Args('page', { type: () => Number }) page: number,
+    @Args('filter', { type: () => FilterTweet, nullable: true })
+    filter?: FilterTweet,
   ): Promise<PaginatedTweets> {
     const { nodes, hasNextPage } = await this.tweetsService.paginateTweets(
       userId,
       limit,
       page,
+      filter,
     );
 
     // Manually map entities to GraphQL models (if needed)

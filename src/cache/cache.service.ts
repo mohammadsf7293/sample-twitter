@@ -1,6 +1,20 @@
 import { Injectable, Inject } from '@nestjs/common';
 import * as Redis from 'ioredis';
-import { CacheKeys, CacheKeysTTLs } from './constants/cache.constants';
+import {
+  CacheKeys,
+  CacheKeysTTLs,
+  TweetAtrrsJoinInfix,
+} from './constants/cache.constants';
+
+export type TweetKey = {
+  id: string;
+  authorId: number;
+  parentTweetId: string | null;
+  hashtags: string[];
+  creationTimeStamp: number;
+  category: string;
+  location: string;
+};
 
 @Injectable()
 export class CacheService {
@@ -66,28 +80,22 @@ export class CacheService {
   }
 
   /**
-   * Add a tweet to ZSET of their created tweets.
-   * @param tweetId - The ID of the tweet.
-   * @param hashtags - An array of hashtags associated with the tweet.
-   * @param category - category of the tweet.
-   * @param creationTimestamp - The timestamp when the tweet was created.
+   * Add a an item with a specific score to redis sorted sets (ZSET).
+   * @param key - The key of set.
+   * @param item - The string item (which has a score) to be added to sorted set.
+   * @param score - score of item.
+   * @param ttl - expiration time of the given key in seconds.
    */
-  async addUserCreatedTweetToZSet(
-    userId: number,
-    tweetId: string,
-    hashtags: string[],
-    category: string,
-    creationTimestamp: number,
+  async addItemToZset(
+    key: string,
+    item: string,
+    score: number,
+    ttl: number,
   ): Promise<void> {
-    const memberItem = `${tweetId}_${hashtags.join('_')}_${category}`;
-    const key = `${CacheKeys.PRIVATE_USER_SELF_CREATED_TWEETS_ZSET_PREFIX}${userId}`;
     try {
-      await this.redis.zadd(key, creationTimestamp, memberItem);
+      await this.redis.zadd(key, score, item);
 
-      await this.redis.expire(
-        key,
-        CacheKeysTTLs.PRIVATE_USER_SELF_CREATED_TWEETS_ZSET,
-      );
+      await this.redis.expire(key, ttl);
     } catch (error) {
       // Log or handle the error as necessary
       console.error('Error adding tweet to ZSET:', error);
@@ -96,20 +104,26 @@ export class CacheService {
     }
   }
 
-  async paginateUserCreatedTweetIds(
-    userId: number,
-    creationTimestampFrom: number,
-    creationTimestampTo: number,
+  /**
+   * Paginates item from a specific sorted set (Zset).
+   * @param key - The key of set.
+   * @param scoreFrom - The score from which items should be paginated.
+   * @param scoreTo - The score from which items should be paginated.
+   * @param offset - offset from which items should be listed
+   * @param offset - limit of items to be listed
+   */
+  async paginateZset(
+    key: string,
+    scoreFrom: number,
+    scoreTo: number,
     offset: number,
     limit: number,
   ): Promise<{ score: number; item: string }[]> {
     try {
-      const key = `${CacheKeys.PRIVATE_USER_SELF_CREATED_TWEETS_ZSET_PREFIX}${userId}`;
-
       const members = await this.redis.zrevrangebyscore(
         key,
-        creationTimestampTo,
-        creationTimestampFrom,
+        scoreTo,
+        scoreFrom,
         'WITHSCORES',
         'LIMIT',
         offset,
@@ -132,37 +146,100 @@ export class CacheService {
     }
   }
 
+  async parsePaginateZsetResults(
+    zsetResults: { item: string; score: number }[], // Receive the array directly
+  ): Promise<TweetKey[]> {
+    return zsetResults.map(({ score, item }) => {
+      const [id, authorId, hashtagsString, category, location, parentTweetId] =
+        item.split(TweetAtrrsJoinInfix);
+      const hashtags = hashtagsString ? hashtagsString.split('_') : [];
+      return {
+        id,
+        authorId: parseInt(authorId, 10),
+        parentTweetId: parentTweetId === '-1' ? null : parentTweetId,
+        hashtags: hashtags,
+        creationTimeStamp: score,
+        category: category,
+        location: location,
+      };
+    });
+  }
+
   /**
-   * Add a public viewable tweet to a ZSET with its creation timestamp as the score.
+   * Add a public viewable tweet to a redis sorted set with its key attributes as the key and its timestamp as the score.
    * @param tweetId - The ID of the tweet.
+   * @param authorId - The ID of the author of the tweet.
    * @param hashtags - An array of hashtags associated with the tweet.
    * @param category - category of the tweet.
+   * @param location - location of the author of the tweet.
    * @param creationTimestamp - The timestamp when the tweet was created.
+   * @param parentTweetId - ID of parent of the tweet.
+   */
+  async addUserCreatedTweetToZSet(
+    tweetId: string,
+    authorId: number,
+    hashtags: string[],
+    category: string,
+    location: string,
+    creationTimestamp: number,
+    parentTweetId?: string,
+  ): Promise<void> {
+    const infix = TweetAtrrsJoinInfix;
+    const parentTweetIdStr = parentTweetId ? parentTweetId.toString() : '-1';
+    const memberItem = `${tweetId}${infix}${authorId.toString()}${infix}${hashtags.join('_')}${infix}${category}${infix}${location}${infix}${parentTweetIdStr}`;
+    const key = `${CacheKeys.PRIVATE_USER_SELF_CREATED_TWEETS_ZSET_PREFIX}${authorId}`;
+    const ttl = CacheKeysTTLs.PRIVATE_USER_SELF_CREATED_TWEETS_ZSET;
+
+    return this.addItemToZset(key, memberItem, creationTimestamp, ttl);
+  }
+
+  async paginateUserCreatedTweetIds(
+    userId: number,
+    creationTimestampFrom: number,
+    creationTimestampTo: number,
+    offset: number,
+    limit: number,
+  ): Promise<TweetKey[]> {
+    const key = `${CacheKeys.PRIVATE_USER_SELF_CREATED_TWEETS_ZSET_PREFIX}${userId}`;
+    const results = await this.paginateZset(
+      key,
+      creationTimestampFrom,
+      creationTimestampTo,
+      offset,
+      limit,
+    );
+
+    return this.parsePaginateZsetResults(results);
+  }
+
+  /**
+   * Add a public viewable tweet to a redis sorted set with its key attributes as the key and its timestamp as the score.
+   * @param tweetId - The ID of the tweet.
+   * @param authorId - The ID of the author of the tweet.
+   * @param hashtags - An array of hashtags associated with the tweet.
+   * @param category - category of the tweet.
+   * @param location - location of the author of the tweet.
+   * @param creationTimestamp - The timestamp when the tweet was created.
+   * @param parentTweetId - ID of parent of the tweet.
    */
   async addPublicViewableTweetToZSet(
     tweetId: string,
+    authorId: number,
     hashtags: string[],
     category: string,
+    location: string,
     creationTimestamp: number,
+    parentTweetId?: string,
   ): Promise<void> {
-    const memberItem = `${tweetId}_${hashtags.join('_')}_${category}`;
-    try {
-      await this.redis.zadd(
-        CacheKeys.PUBLIC_VIEWABLE_TWEETS_ZSET,
-        creationTimestamp,
-        memberItem,
-      );
-
-      await this.redis.expire(
-        CacheKeys.PUBLIC_VIEWABLE_TWEETS_ZSET,
-        CacheKeysTTLs.PUBLIC_VIEWABLE_TWEETS_ZSET,
-      );
-    } catch (error) {
-      // Log or handle the error as necessary
-      console.error('Error adding tweet to ZSET:', error);
-      //TODO: there must be an error management, defining logical and internal errors
-      throw new Error('Could not add public tweet to ZSET');
-    }
+    const infix = TweetAtrrsJoinInfix;
+    const parentTweetIdStr = parentTweetId ? parentTweetId.toString() : '-1';
+    const memberItem = `${tweetId}${infix}${authorId.toString()}${infix}${hashtags.join('_')}${infix}${category}${infix}${location}${infix}${parentTweetIdStr}`;
+    return this.addItemToZset(
+      CacheKeys.PUBLIC_VIEWABLE_TWEETS_ZSET,
+      memberItem,
+      creationTimestamp,
+      CacheKeysTTLs.PUBLIC_VIEWABLE_TWEETS_ZSET,
+    );
   }
 
   async paginatePublicTweetIds(
@@ -170,64 +247,47 @@ export class CacheService {
     creationTimestampTo: number,
     offset: number,
     limit: number,
-  ): Promise<{ score: number; item: string }[]> {
-    try {
-      const members = await this.redis.zrevrangebyscore(
-        CacheKeys.PUBLIC_VIEWABLE_TWEETS_ZSET,
-        creationTimestampTo,
-        creationTimestampFrom,
-        'WITHSCORES',
-        'LIMIT',
-        offset,
-        limit,
-      );
+  ): Promise<TweetKey[]> {
+    const key = CacheKeys.PUBLIC_VIEWABLE_TWEETS_ZSET;
+    const results = await this.paginateZset(
+      key,
+      creationTimestampFrom,
+      creationTimestampTo,
+      offset,
+      limit,
+    );
 
-      // Convert the flat array into an array of objects
-      const results = [];
-      for (let i = 0; i < members.length; i += 2) {
-        results.push({
-          item: members[i],
-          score: parseFloat(members[i + 1]), // Convert the score from string to number
-        });
-      }
-
-      return results;
-    } catch (error) {
-      console.error('Error fetching items from zset:', error);
-      throw new Error('Could not find items from Zset');
-    }
+    return this.parsePaginateZsetResults(results);
   }
 
   /**
    * Add a private viewable tweet to a ZSET with its creation timestamp as the score.
    * @param groupId - The ID of the group the tweet belongs to.
    * @param tweetId - The ID of the tweet.
+   * @param authorId - The ID of the author of the tweet.
    * @param hashtags - An array of hashtags associated with the tweet.
    * @param category - category of the tweet.
+   * @param location - location of the author of the tweet.
    * @param creationTimestamp - The timestamp when the tweet was created.
+   * @param parentTweetId - ID of parent of the tweet.
    */
   async addPrivateViewableTweetToZSet(
     groupId: number,
     tweetId: string,
+    authorId: number,
     hashtags: string[],
     category: string,
+    location: string,
     creationTimestamp: number,
+    parentTweetId?: string,
   ): Promise<void> {
-    const memberItem = `${tweetId}_${hashtags.join('_')}_${category}`;
-    try {
-      const key = `${CacheKeys.PRIVATE_GROUP_VIEWABLE_TWEETS_ZSET_PREFIX}${groupId.toString()}`;
-      await this.redis.zadd(key, creationTimestamp, memberItem);
+    const infix = TweetAtrrsJoinInfix;
+    const parentTweetIdStr = parentTweetId ? parentTweetId.toString() : '-1';
+    const memberItem = `${tweetId}${infix}${authorId.toString()}${infix}${hashtags.join('_')}${infix}${category}${infix}${location}${infix}${parentTweetIdStr}`;
+    const key = `${CacheKeys.PRIVATE_GROUP_VIEWABLE_TWEETS_ZSET_PREFIX}${groupId.toString()}`;
+    const ttl = CacheKeysTTLs.PRIVATE_GROUP_VIEWABLE_TWEETS_ZSET;
 
-      await this.redis.expire(
-        key,
-        CacheKeysTTLs.PRIVATE_GROUP_VIEWABLE_TWEETS_ZSET,
-      );
-    } catch (error) {
-      // Log or handle the error as necessary
-      console.error('Error adding tweet to ZSET:', error);
-      //TODO: there must be an error management, defining logical and internal errors
-      throw new Error('Could not add public tweet to ZSET');
-    }
+    return this.addItemToZset(key, memberItem, creationTimestamp, ttl);
   }
 
   async paginatePrivateTweetIds(
@@ -236,33 +296,17 @@ export class CacheService {
     creationTimestampTo: number,
     offset: number,
     limit: number,
-  ): Promise<{ score: number; item: string }[]> {
-    try {
-      const key = `${CacheKeys.PRIVATE_GROUP_VIEWABLE_TWEETS_ZSET_PREFIX}${groupId.toString()}`;
-      const members = await this.redis.zrevrangebyscore(
-        key,
-        creationTimestampTo,
-        creationTimestampFrom,
-        'WITHSCORES',
-        'LIMIT',
-        offset,
-        limit,
-      );
+  ): Promise<TweetKey[]> {
+    const key = `${CacheKeys.PRIVATE_GROUP_VIEWABLE_TWEETS_ZSET_PREFIX}${groupId.toString()}`;
+    const results = await this.paginateZset(
+      key,
+      creationTimestampFrom,
+      creationTimestampTo,
+      offset,
+      limit,
+    );
 
-      // Convert the flat array into an array of objects
-      const results = [];
-      for (let i = 0; i < members.length; i += 2) {
-        results.push({
-          item: members[i],
-          score: parseFloat(members[i + 1]), // Convert the score from string to number
-        });
-      }
-
-      return results;
-    } catch (error) {
-      console.error('Error fetching items from zset:', error);
-      throw new Error('Could not find items from Zset');
-    }
+    return this.parsePaginateZsetResults(results);
   }
 
   async setTweetIsPublicEditable(tweetId: string): Promise<void> {

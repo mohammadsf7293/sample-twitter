@@ -235,7 +235,6 @@ describe('TweetsResolver', () => {
       jest
         .spyOn(service, 'paginateTweets')
         .mockResolvedValue({ nodes: mockTweets, hasNextPage });
-      // service.paginateTweets.mockResolvedValue({ nodes: mockTweets, hasNextPage });
 
       const result: PaginatedTweets = await resolver.paginateTweets(123, 2, 1);
 

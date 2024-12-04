@@ -294,6 +294,34 @@ query PaginateTweets {
   }
 }
 ```
+### Paginate tweets (with filter)
+```
+query PaginateTweets {
+  paginateTweets(
+    userId: 1
+    limit: 10
+    page: 0
+    filter: {
+      authorId: "1"
+      hashtag: "#greetings"
+      parentTweetId: "parent123"
+      category: Tech
+      location: "Helsinki"
+    }
+  ) {
+    nodes {
+      id
+      authorId
+      parentTweetId
+      hashtags
+      createTime
+      category
+      location
+    }
+    hasNextPage
+  }
+}
+```
 
 # Run tests
 

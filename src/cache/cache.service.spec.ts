@@ -1,6 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { CacheService } from './cache.service';
-import { CacheKeys, CacheKeysTTLs } from './constants/cache.constants';
+import {
+  CacheKeys,
+  CacheKeysTTLs,
+  TweetAtrrsJoinInfix,
+} from './constants/cache.constants';
 
 describe('CacheService', () => {
   let service: CacheService;
@@ -242,96 +246,168 @@ describe('CacheService', () => {
   });
 
   describe('addUserCreatedTweetToZSet', () => {
-    it('should successfully add tweet to ZSET', async () => {
-      // Arrange
-      const userId = 123;
-      const tweetId = 'tweet123';
-      const hashtags = ['#test', '#new'];
-      const category = 'news';
-      const creationTimestamp = Date.now();
+    it('should successfully add a user-created tweet to the ZSET', async () => {
+      const tweetId = '12345';
+      const authorId = 67890;
+      const hashtags = ['hashtag1', 'hashtag2'];
+      const category = 'Tech';
+      const location = 'NYC';
+      const creationTimestamp = 1633024800; // Example timestamp
+      const parentTweetId = '54321';
 
-      const key = `${CacheKeys.PRIVATE_USER_SELF_CREATED_TWEETS_ZSET_PREFIX}${userId}`;
-      const memberItem = `${tweetId}_${hashtags.join('_')}_${category}`;
+      const infix = TweetAtrrsJoinInfix;
+      const parentTweetIdStr = parentTweetId ? parentTweetId.toString() : '-1';
+      const memberItem = `${tweetId}${infix}${authorId.toString()}${infix}${hashtags.join('_')}${infix}${category}${infix}${location}${infix}${parentTweetIdStr}`;
+      const key = `${CacheKeys.PRIVATE_USER_SELF_CREATED_TWEETS_ZSET_PREFIX}${authorId}`;
+      const ttl = CacheKeysTTLs.PRIVATE_USER_SELF_CREATED_TWEETS_ZSET;
 
-      jest.spyOn(mockRedisClient, 'zadd').mockResolvedValue(1);
-      jest.spyOn(mockRedisClient, 'expire').mockResolvedValue(1);
+      jest.spyOn(service, 'addItemToZset').mockResolvedValueOnce();
 
-      // Act
-      await service.addUserCreatedTweetToZSet(
-        userId,
-        tweetId,
-        hashtags,
-        category,
-        creationTimestamp,
-      );
+      await expect(
+        service.addUserCreatedTweetToZSet(
+          tweetId,
+          authorId,
+          hashtags,
+          category,
+          location,
+          creationTimestamp,
+          parentTweetId,
+        ),
+      ).resolves.toBeUndefined();
 
-      // Assert
-      expect(mockRedisClient.zadd).toHaveBeenCalledWith(
+      expect(service.addItemToZset).toHaveBeenCalledWith(
         key,
-        creationTimestamp,
         memberItem,
-      );
-      expect(mockRedisClient.expire).toHaveBeenCalledWith(
-        key,
-        CacheKeysTTLs.PRIVATE_USER_SELF_CREATED_TWEETS_ZSET,
+        creationTimestamp,
+        ttl,
       );
     });
 
-    it('should throw an error if Redis fails to add tweet to ZSET', async () => {
-      // Arrange
-      const userId = 123;
-      const tweetId = 'tweet123';
-      const hashtags = ['#test', '#new'];
-      const category = 'news';
-      const creationTimestamp = Date.now();
+    it('should handle when parentTweetId is undefined', async () => {
+      const tweetId = '12345';
+      const authorId = 67890;
+      const hashtags = ['hashtag1', 'hashtag2'];
+      const category = 'Tech';
+      const location = 'NYC';
+      const creationTimestamp = 1633024800; // Example timestamp
+      const parentTweetId = undefined;
 
-      jest
-        .spyOn(mockRedisClient, 'zadd')
-        .mockRejectedValue(new Error('Redis failure'));
-      jest
-        .spyOn(mockRedisClient, 'expire')
-        .mockRejectedValue(new Error('Redis failure'));
+      const infix = TweetAtrrsJoinInfix;
+      const parentTweetIdStr = parentTweetId ? parentTweetId.toString() : '-1';
+      const memberItem = `${tweetId}${infix}${authorId.toString()}${infix}${hashtags.join('_')}${infix}${category}${infix}${location}${infix}${parentTweetIdStr}`;
+      const key = `${CacheKeys.PRIVATE_USER_SELF_CREATED_TWEETS_ZSET_PREFIX}${authorId}`;
+      const ttl = CacheKeysTTLs.PRIVATE_USER_SELF_CREATED_TWEETS_ZSET;
 
-      // Act & Assert
+      jest.spyOn(service, 'addItemToZset').mockResolvedValueOnce();
+
       await expect(
         service.addUserCreatedTweetToZSet(
-          userId,
           tweetId,
+          authorId,
           hashtags,
           category,
+          location,
           creationTimestamp,
         ),
-      ).rejects.toThrow('Could not add public tweet to ZSET');
+      ).resolves.toBeUndefined();
 
-      expect(mockRedisClient.zadd).toHaveBeenCalled();
-      expect(mockRedisClient.expire).toHaveBeenCalledTimes(0);
+      expect(service.addItemToZset).toHaveBeenCalledWith(
+        key,
+        memberItem,
+        creationTimestamp,
+        ttl,
+      );
+    });
+
+    it('should throw an error if addItemToZset fails', async () => {
+      const tweetId = '12345';
+      const authorId = 67890;
+      const hashtags = ['hashtag1', 'hashtag2'];
+      const category = 'Tech';
+      const location = 'NYC';
+      const creationTimestamp = 1633024800;
+      const parentTweetId = '54321';
+
+      jest
+        .spyOn(service, 'addItemToZset')
+        .mockRejectedValueOnce(new Error('Redis error'));
+
+      await expect(
+        service.addUserCreatedTweetToZSet(
+          tweetId,
+          authorId,
+          hashtags,
+          category,
+          location,
+          creationTimestamp,
+          parentTweetId,
+        ),
+      ).rejects.toThrow('Redis error');
+
+      const key = `${CacheKeys.PRIVATE_USER_SELF_CREATED_TWEETS_ZSET_PREFIX}${authorId}`;
+      const infix = TweetAtrrsJoinInfix;
+      const parentTweetIdStr = parentTweetId ? parentTweetId.toString() : '-1';
+      const memberItem = `${tweetId}${infix}${authorId.toString()}${infix}${hashtags.join('_')}${infix}${category}${infix}${location}${infix}${parentTweetIdStr}`;
+      const ttl = CacheKeysTTLs.PRIVATE_USER_SELF_CREATED_TWEETS_ZSET;
+
+      expect(service.addItemToZset).toHaveBeenCalledWith(
+        key,
+        memberItem,
+        creationTimestamp,
+        ttl,
+      );
     });
   });
 
   describe('paginateUserCreatedTweetIds', () => {
-    it('should paginate user created tweet IDs correctly', async () => {
-      // Arrange
+    it('should return parsed tweet keys from paginateZset results', async () => {
       const userId = 123;
-      const creationTimestampFrom = 1670000000000;
-      const creationTimestampTo = 1679999999999;
+      const creationTimestampFrom = 1637720000;
+      const creationTimestampTo = 1637729999;
       const offset = 0;
       const limit = 10;
 
-      const key = `${CacheKeys.PRIVATE_USER_SELF_CREATED_TWEETS_ZSET_PREFIX}${userId}`;
-      const mockMembers = [
-        'tweet_1_#test_news',
-        '1670001000000',
-        'tweet_2_#new_tech',
-        '1670002000000',
-        'tweet_3_#cool_updates',
-        '1670003000000',
-      ]; // Mock return value from zrevrangebyscore
+      // Example mock results from paginateZset
+      const infix = TweetAtrrsJoinInfix;
+      const mockZsetResults = [
+        {
+          item: `tweetId1${infix}123${infix}hashtag1${infix}Sport${infix}Location1${infix}-1`,
+          score: 1637721323,
+        },
+        {
+          item: `tweetId2${infix}123${infix}hashtag2${infix}Sport${infix}Location1${infix}tweetId1`,
+          score: 1637724321,
+        },
+      ];
 
+      // Mock paginateZset to return the mockZsetResults
+      jest.spyOn(service, 'paginateZset').mockResolvedValue(mockZsetResults);
+
+      // Mock parsePaginateZsetResults to return the expected TweetKey format
+      const mockParsedResults = [
+        {
+          id: 'tweetId1',
+          authorId: 123,
+          parentTweetId: null,
+          hashtags: ['hashtag1'],
+          creationTimeStamp: 1637721323,
+          category: 'Sport',
+          location: 'Location1',
+        },
+        {
+          id: 'tweetId2',
+          authorId: 123,
+          parentTweetId: 'tweetId1',
+          hashtags: ['hashtag2'],
+          creationTimeStamp: 1637724321,
+          category: 'Sport',
+          location: 'Location1',
+        },
+      ];
       jest
-        .spyOn(mockRedisClient, 'zrevrangebyscore')
-        .mockResolvedValue(mockMembers);
+        .spyOn(service, 'parsePaginateZsetResults')
+        .mockResolvedValue(mockParsedResults);
 
-      // Act
       const result = await service.paginateUserCreatedTweetIds(
         userId,
         creationTimestampFrom,
@@ -340,210 +416,561 @@ describe('CacheService', () => {
         limit,
       );
 
-      // Assert
+      expect(service.paginateZset).toHaveBeenCalledWith(
+        `${CacheKeys.PRIVATE_USER_SELF_CREATED_TWEETS_ZSET_PREFIX}${userId}`,
+        creationTimestampFrom,
+        creationTimestampTo,
+        offset,
+        limit,
+      );
+
+      expect(service.parsePaginateZsetResults).toHaveBeenCalledWith(
+        mockZsetResults,
+      );
+      expect(result).toEqual(mockParsedResults);
+    });
+
+    it('should return empty array if paginateZset returns no results', async () => {
+      const userId = 123;
+      const creationTimestampFrom = 1637720000;
+      const creationTimestampTo = 1637729999;
+      const offset = 0;
+      const limit = 10;
+
+      // Mock paginateZset to return no results
+      jest.spyOn(service, 'paginateZset').mockResolvedValue([]);
+
+      const result = await service.paginateUserCreatedTweetIds(
+        userId,
+        creationTimestampFrom,
+        creationTimestampTo,
+        offset,
+        limit,
+      );
+
+      expect(result).toEqual([]); // Should return an empty array
+    });
+
+    it('should throw an error if paginateZset fails', async () => {
+      const userId = 123;
+      const creationTimestampFrom = 1637720000;
+      const creationTimestampTo = 1637729999;
+      const offset = 0;
+      const limit = 10;
+
+      // Mock paginateZset to throw an error
+      jest
+        .spyOn(service, 'paginateZset')
+        .mockRejectedValue(new Error('Error fetching data'));
+
+      await expect(
+        service.paginateUserCreatedTweetIds(
+          userId,
+          creationTimestampFrom,
+          creationTimestampTo,
+          offset,
+          limit,
+        ),
+      ).rejects.toThrow('Error fetching data');
+    });
+  });
+
+  describe('addItemToZset', () => {
+    it('should successfully add an item to a ZSET and set expiration', async () => {
+      const key = 'test-zset';
+      const item = 'test-item';
+      const score = 123;
+      const ttl = 3600;
+
+      // Mock zadd success
+      jest.spyOn(mockRedisClient, 'zadd').mockResolvedValueOnce(1);
+      // Mock expire success
+      jest.spyOn(mockRedisClient, 'expire').mockResolvedValueOnce(1);
+
+      await expect(
+        service.addItemToZset(key, item, score, ttl),
+      ).resolves.toBeUndefined();
+
+      expect(mockRedisClient.zadd).toHaveBeenCalledWith(key, score, item);
+      expect(mockRedisClient.expire).toHaveBeenCalledWith(key, ttl);
+    });
+
+    it('should throw an error if zadd fails', async () => {
+      const key = 'test-zset';
+      const item = 'test-item';
+      const score = 123;
+      const ttl = 3600;
+
+      jest
+        .spyOn(mockRedisClient, 'zadd')
+        .mockRejectedValueOnce(new Error('zadd error'));
+
+      await expect(
+        service.addItemToZset(key, item, score, ttl),
+      ).rejects.toThrow('Could not add public tweet to ZSET');
+
+      expect(mockRedisClient.zadd).toHaveBeenCalledWith(key, score, item);
+      expect(mockRedisClient.expire).not.toHaveBeenCalled();
+    });
+
+    it('should throw an error if expire fails', async () => {
+      const key = 'test-zset';
+      const item = 'test-item';
+      const score = 123;
+      const ttl = 3600;
+
+      jest.spyOn(mockRedisClient, 'zadd').mockResolvedValueOnce(1);
+      jest
+        .spyOn(mockRedisClient, 'expire')
+        .mockRejectedValueOnce(new Error('expire error'));
+
+      await expect(
+        service.addItemToZset(key, item, score, ttl),
+      ).rejects.toThrow('Could not add public tweet to ZSET');
+
+      expect(mockRedisClient.zadd).toHaveBeenCalledWith(key, score, item);
+      expect(mockRedisClient.expire).toHaveBeenCalledWith(key, ttl);
+    });
+
+    it('should handle unexpected errors and log them', async () => {
+      const key = 'test-zset';
+      const item = 'test-item';
+      const score = 123;
+      const ttl = 3600;
+
+      jest.spyOn(mockRedisClient, 'zadd').mockImplementation(() => {
+        throw new Error('Unexpected error');
+      });
+
+      await expect(
+        service.addItemToZset(key, item, score, ttl),
+      ).rejects.toThrow('Could not add public tweet to ZSET');
+    });
+  });
+
+  describe('paginateZset', () => {
+    it('should return paginated items from the ZSET', async () => {
+      const key = 'example:zset';
+      const scoreFrom = 100;
+      const scoreTo = 0;
+      const offset = 0;
+      const limit = 5;
+
+      // Mocked response from Redis
+      const mockRedisResponse = ['item1', '95', 'item2', '85', 'item3', '75'];
+
+      const expectedResults = [
+        { item: 'item1', score: 95 },
+        { item: 'item2', score: 85 },
+        { item: 'item3', score: 75 },
+      ];
+
+      jest
+        .spyOn(mockRedisClient, 'zrevrangebyscore')
+        .mockResolvedValueOnce(mockRedisResponse);
+
+      const results = await service.paginateZset(
+        key,
+        scoreFrom,
+        scoreTo,
+        offset,
+        limit,
+      );
+
+      expect(results).toEqual(expectedResults);
       expect(mockRedisClient.zrevrangebyscore).toHaveBeenCalledWith(
         key,
-        creationTimestampTo,
-        creationTimestampFrom,
+        scoreTo,
+        scoreFrom,
         'WITHSCORES',
         'LIMIT',
         offset,
         limit,
       );
-      expect(result).toEqual([
-        { item: 'tweet_1_#test_news', score: 1670001000000 },
-        { item: 'tweet_2_#new_tech', score: 1670002000000 },
-        { item: 'tweet_3_#cool_updates', score: 1670003000000 },
+    });
+
+    it('should return an empty array if no items are found in the ZSET', async () => {
+      const key = 'example:zset';
+      const scoreFrom = 100;
+      const scoreTo = 0;
+      const offset = 0;
+      const limit = 5;
+
+      jest.spyOn(mockRedisClient, 'zrevrangebyscore').mockResolvedValueOnce([]);
+
+      const results = await service.paginateZset(
+        key,
+        scoreFrom,
+        scoreTo,
+        offset,
+        limit,
+      );
+
+      expect(results).toEqual([]);
+      expect(mockRedisClient.zrevrangebyscore).toHaveBeenCalledWith(
+        key,
+        scoreTo,
+        scoreFrom,
+        'WITHSCORES',
+        'LIMIT',
+        offset,
+        limit,
+      );
+    });
+
+    it('should throw an error if Redis operation fails', async () => {
+      const key = 'example:zset';
+      const scoreFrom = 100;
+      const scoreTo = 0;
+      const offset = 0;
+      const limit = 5;
+
+      jest
+        .spyOn(mockRedisClient, 'zrevrangebyscore')
+        .mockRejectedValueOnce(new Error('Redis error'));
+
+      await expect(
+        service.paginateZset(key, scoreFrom, scoreTo, offset, limit),
+      ).rejects.toThrow('Could not find items from Zset');
+
+      expect(mockRedisClient.zrevrangebyscore).toHaveBeenCalledWith(
+        key,
+        scoreTo,
+        scoreFrom,
+        'WITHSCORES',
+        'LIMIT',
+        offset,
+        limit,
+      );
+    });
+  });
+
+  describe('parsePaginateZsetResults', () => {
+    it('should parse the Zset results correctly', async () => {
+      const infix = TweetAtrrsJoinInfix;
+      const zsetResults = [
+        {
+          item: `tweetId1${infix}123${infix}hashtag1_hashtag2${infix}Sport${infix}Location1${infix}-1`,
+          score: 1637721323,
+        },
+        {
+          item: `tweetId2${infix}456${infix}hashtag3${infix}Sport${infix}Location2${infix}tweetId1`,
+          score: 1637724321,
+        },
+      ];
+
+      const parsedResults = await service.parsePaginateZsetResults(zsetResults);
+
+      expect(parsedResults).toEqual([
+        {
+          id: 'tweetId1',
+          authorId: 123,
+          parentTweetId: null,
+          hashtags: ['hashtag1', 'hashtag2'],
+          creationTimeStamp: 1637721323,
+          category: 'Sport',
+          location: 'Location1',
+        },
+        {
+          id: 'tweetId2',
+          authorId: 456,
+          parentTweetId: 'tweetId1',
+          hashtags: ['hashtag3'],
+          creationTimeStamp: 1637724321,
+          category: 'Sport',
+          location: 'Location2',
+        },
       ]);
     });
 
-    it('should throw an error if Redis fails to fetch tweet IDs', async () => {
-      // Arrange
-      const userId = 123;
-      const creationTimestampFrom = 1670000000000;
-      const creationTimestampTo = 1679999999999;
-      const offset = 0;
-      const limit = 10;
+    it('should handle empty hashtags', async () => {
+      const infix = TweetAtrrsJoinInfix;
+      const zsetResults = [
+        {
+          item: `tweetId3${infix}789${infix}${infix}Tech${infix}Location3${infix}-1`,
+          score: 1637731323,
+        },
+      ];
 
-      jest
-        .spyOn(mockRedisClient, 'zrevrangebyscore')
-        .mockRejectedValue(new Error('Redis failure'));
+      const parsedResults = await service.parsePaginateZsetResults(zsetResults);
 
-      // Act & Assert
-      await expect(
-        service.paginateUserCreatedTweetIds(
-          userId,
-          creationTimestampFrom,
-          creationTimestampTo,
-          offset,
-          limit,
-        ),
-      ).rejects.toThrow('Could not find items from Zset');
-
-      expect(mockRedisClient.zrevrangebyscore).toHaveBeenCalled();
+      expect(parsedResults).toEqual([
+        {
+          id: 'tweetId3',
+          authorId: 789,
+          parentTweetId: null,
+          hashtags: [],
+          creationTimeStamp: 1637731323,
+          category: 'Tech',
+          location: 'Location3',
+        },
+      ]);
     });
 
-    it('should log an error if Redis fails to fetch tweet IDs', async () => {
-      // Arrange
-      const userId = 123;
-      const creationTimestampFrom = 1670000000000;
-      const creationTimestampTo = 1679999999999;
-      const offset = 0;
-      const limit = 10;
+    it('should handle missing parentTweetId and default it to null', async () => {
+      const infix = TweetAtrrsJoinInfix;
+      const zsetResults = [
+        {
+          item: `tweetId4${infix}1010${infix}hashtag4${infix}News${infix}Location4${infix}-1`,
+          score: 1637741323,
+        },
+      ];
 
-      const consoleErrorSpy = jest
-        .spyOn(console, 'error')
-        .mockImplementation(() => {});
+      const parsedResults = await service.parsePaginateZsetResults(zsetResults);
 
-      jest
-        .spyOn(mockRedisClient, 'zrevrangebyscore')
-        .mockRejectedValue(new Error('Redis failure'));
+      expect(parsedResults).toEqual([
+        {
+          id: 'tweetId4',
+          authorId: 1010,
+          parentTweetId: null,
+          hashtags: ['hashtag4'],
+          creationTimeStamp: 1637741323,
+          category: 'News',
+          location: 'Location4',
+        },
+      ]);
+    });
 
-      // Act
-      await expect(
-        service.paginateUserCreatedTweetIds(
-          userId,
-          creationTimestampFrom,
-          creationTimestampTo,
-          offset,
-          limit,
-        ),
-      ).rejects.toThrow('Could not find items from Zset');
+    it('should correctly parse parentTweetId if provided', async () => {
+      const infix = TweetAtrrsJoinInfix;
+      const zsetResults = [
+        {
+          item: `tweetId5${infix}2021${infix}hashtag5${infix}Sport${infix}Location5${infix}tweetId4`,
+          score: 1637751323,
+        },
+      ];
 
-      // Assert
-      expect(consoleErrorSpy).toHaveBeenCalledWith(
-        'Error fetching items from zset:',
-        new Error('Redis failure'),
-      );
-      consoleErrorSpy.mockRestore();
+      const parsedResults = await service.parsePaginateZsetResults(zsetResults);
+
+      expect(parsedResults).toEqual([
+        {
+          id: 'tweetId5',
+          authorId: 2021,
+          parentTweetId: 'tweetId4',
+          hashtags: ['hashtag5'],
+          creationTimeStamp: 1637751323,
+          category: 'Sport',
+          location: 'Location5',
+        },
+      ]);
     });
   });
 
   describe('addPublicViewableTweetToZSet', () => {
-    it('should add a public tweet to the ZSET with the correct score and value', async () => {
+    it('should successfully add a public viewable tweet to the ZSET', async () => {
       const tweetId = '12345';
-      const hashtags = ['fun', 'coding'];
-      const category = 'tech';
-      const creationTimestamp = 1670000000;
+      const authorId = 67890;
+      const hashtags = ['hashtag1', 'hashtag2'];
+      const category = 'Tech';
+      const location = 'NYC';
+      const creationTimestamp = 1633024800; // Example timestamp
+      const parentTweetId = '54321';
 
-      // Call the method
-      await (service as any).addPublicViewableTweetToZSet(
-        tweetId,
-        hashtags,
-        category,
-        creationTimestamp,
-      );
+      const infix = TweetAtrrsJoinInfix;
+      const parentTweetIdStr = parentTweetId ? parentTweetId.toString() : '-1';
+      const memberItem = `${tweetId}${infix}${authorId.toString()}${infix}${hashtags.join('_')}${infix}${category}${infix}${location}${infix}${parentTweetIdStr}`;
 
-      // Verify that the zadd command was called with the expected arguments
-      const memberItem = `${tweetId}_${hashtags.join('_')}_${category}`;
-      expect(mockRedisClient.zadd).toHaveBeenCalledWith(
+      jest.spyOn(service, 'addItemToZset').mockResolvedValueOnce();
+
+      await expect(
+        service.addPublicViewableTweetToZSet(
+          tweetId,
+          authorId,
+          hashtags,
+          category,
+          location,
+          creationTimestamp,
+          parentTweetId,
+        ),
+      ).resolves.toBeUndefined();
+
+      expect(service.addItemToZset).toHaveBeenCalledWith(
         CacheKeys.PUBLIC_VIEWABLE_TWEETS_ZSET,
-        creationTimestamp,
         memberItem,
-      );
-
-      expect(mockRedisClient.expire).toHaveBeenCalledWith(
-        CacheKeys.PUBLIC_VIEWABLE_TWEETS_ZSET,
+        creationTimestamp,
         CacheKeysTTLs.PUBLIC_VIEWABLE_TWEETS_ZSET,
       );
+    });
+
+    it('should handle when parentTweetId is undefined', async () => {
+      const tweetId = '12345';
+      const authorId = 67890;
+      const hashtags = ['hashtag1', 'hashtag2'];
+      const category = 'Tech';
+      const location = 'NYC';
+      const creationTimestamp = 1633024800; // Example timestamp
+      const parentTweetId = undefined;
+
+      const infix = TweetAtrrsJoinInfix;
+      const parentTweetIdStr = parentTweetId ? parentTweetId.toString() : '-1';
+      const memberItem = `${tweetId}${infix}${authorId.toString()}${infix}${hashtags.join('_')}${infix}${category}${infix}${location}${infix}${parentTweetIdStr}`;
+
+      jest.spyOn(service, 'addItemToZset').mockResolvedValueOnce();
+
+      await expect(
+        service.addPublicViewableTweetToZSet(
+          tweetId,
+          authorId,
+          hashtags,
+          category,
+          location,
+          creationTimestamp,
+        ),
+      ).resolves.toBeUndefined();
+
+      expect(service.addItemToZset).toHaveBeenCalledWith(
+        CacheKeys.PUBLIC_VIEWABLE_TWEETS_ZSET,
+        memberItem,
+        creationTimestamp,
+        CacheKeysTTLs.PUBLIC_VIEWABLE_TWEETS_ZSET,
+      );
+    });
+
+    it('should throw an error if addItemToZset fails', async () => {
+      const tweetId = '12345';
+      const authorId = 67890;
+      const hashtags = ['hashtag1', 'hashtag2'];
+      const category = 'Tech';
+      const location = 'NYC';
+      const creationTimestamp = 1633024800; // Example timestamp
+      const parentTweetId = '54321';
+
+      jest
+        .spyOn(service, 'addItemToZset')
+        .mockRejectedValueOnce(new Error('Redis error'));
+
+      await expect(
+        service.addPublicViewableTweetToZSet(
+          tweetId,
+          authorId,
+          hashtags,
+          category,
+          location,
+          creationTimestamp,
+          parentTweetId,
+        ),
+      ).rejects.toThrow('Redis error');
+
+      expect(service.addItemToZset).toHaveBeenCalled();
     });
   });
 
   describe('addPrivateViewableTweetToZSet', () => {
-    it('should add a private viewable tweet to the ZSET and set TTL', async () => {
-      // Arrange
-      const groupId = 1;
-      const tweetId = 'tweet123';
-      const hashtags = ['#hashtag1', '#hashtag2'];
-      const category = 'tech';
-      const creationTimestamp = 1627681443000;
-      const expectedKey = `${CacheKeys.PRIVATE_GROUP_VIEWABLE_TWEETS_ZSET_PREFIX}${groupId.toString()}`;
-      const expectedMemberItem = `${tweetId}_${hashtags.join('_')}_${category}`;
+    it('should successfully add a private viewable tweet to the ZSET', async () => {
+      const groupId = 123;
+      const tweetId = '456';
+      const authorId = 789;
+      const hashtags = ['tag1', 'tag2'];
+      const category = 'Tech';
+      const location = 'NYC';
+      const creationTimestamp = 1678901234; // Example timestamp
+      const parentTweetId = '789';
 
-      mockRedisClient.zadd.mockResolvedValue(1);
-      mockRedisClient.expire.mockResolvedValue(1);
+      const infix = TweetAtrrsJoinInfix;
+      const parentTweetIdStr = parentTweetId ? parentTweetId.toString() : '-1';
+      const memberItem = `${tweetId}${infix}${authorId.toString()}${infix}${hashtags.join('_')}${infix}${category}${infix}${location}${infix}${parentTweetIdStr}`;
+      const key = `${CacheKeys.PRIVATE_GROUP_VIEWABLE_TWEETS_ZSET_PREFIX}${groupId.toString()}`;
+      const ttl = CacheKeysTTLs.PRIVATE_GROUP_VIEWABLE_TWEETS_ZSET;
 
-      // Act
-      await service.addPrivateViewableTweetToZSet(
-        groupId,
-        tweetId,
-        hashtags,
-        category,
-        creationTimestamp,
-      );
+      jest.spyOn(service, 'addItemToZset').mockResolvedValueOnce();
 
-      // Assert
-      expect(mockRedisClient.zadd).toHaveBeenCalledWith(
-        expectedKey,
-        creationTimestamp,
-        expectedMemberItem,
-      );
-      expect(mockRedisClient.expire).toHaveBeenCalledWith(
-        expectedKey,
-        CacheKeysTTLs.PRIVATE_GROUP_VIEWABLE_TWEETS_ZSET,
-      );
-    });
-
-    it('should throw an error if adding tweet to ZSET fails', async () => {
-      // Arrange
-      const groupId = 1;
-      const tweetId = 'tweet123';
-      const hashtags = ['#hashtag1', '#hashtag2'];
-      const category = 'tech';
-      const creationTimestamp = 1627681443000;
-      const expectedKey = `${CacheKeys.PRIVATE_GROUP_VIEWABLE_TWEETS_ZSET_PREFIX}${groupId.toString()}`;
-      const expectedMemberItem = `${tweetId}_${hashtags.join('_')}_${category}`;
-
-      mockRedisClient.zadd.mockRejectedValue(new Error('Redis failure'));
-
-      // Act & Assert
       await expect(
         service.addPrivateViewableTweetToZSet(
           groupId,
           tweetId,
+          authorId,
           hashtags,
           category,
+          location,
           creationTimestamp,
+          parentTweetId,
         ),
-      ).rejects.toThrowError('Could not add public tweet to ZSET');
-      expect(mockRedisClient.zadd).toHaveBeenCalledWith(
-        expectedKey,
+      ).resolves.toBeUndefined();
+
+      expect(service.addItemToZset).toHaveBeenCalledWith(
+        key,
+        memberItem,
         creationTimestamp,
-        expectedMemberItem,
+        ttl,
       );
     });
 
-    it('should handle the error if Redis expires call fails', async () => {
-      // Arrange
-      const groupId = 1;
-      const tweetId = 'tweet123';
-      const hashtags = ['#hashtag1', '#hashtag2'];
-      const category = 'tech';
-      const creationTimestamp = 1627681443000;
-      const expectedKey = `${CacheKeys.PRIVATE_GROUP_VIEWABLE_TWEETS_ZSET_PREFIX}${groupId.toString()}`;
-      const expectedMemberItem = `${tweetId}_${hashtags.join('_')}_${category}`;
+    it('should handle when parentTweetId is undefined', async () => {
+      const groupId = 123;
+      const tweetId = '456';
+      const authorId = 789;
+      const hashtags = ['tag1', 'tag2'];
+      const category = 'Tech';
+      const location = 'NYC';
+      const creationTimestamp = 1678901234; // Example timestamp
+      const parentTweetId = undefined;
 
-      mockRedisClient.zadd.mockResolvedValue(1);
-      mockRedisClient.expire.mockRejectedValue(new Error('Expire failed'));
+      const infix = TweetAtrrsJoinInfix;
+      const parentTweetIdStr = parentTweetId ? parentTweetId.toString() : '-1';
+      const memberItem = `${tweetId}${infix}${authorId.toString()}${infix}${hashtags.join('_')}${infix}${category}${infix}${location}${infix}${parentTweetIdStr}`;
+      const key = `${CacheKeys.PRIVATE_GROUP_VIEWABLE_TWEETS_ZSET_PREFIX}${groupId.toString()}`;
+      const ttl = CacheKeysTTLs.PRIVATE_GROUP_VIEWABLE_TWEETS_ZSET;
 
-      // Act & Assert
+      jest.spyOn(service, 'addItemToZset').mockResolvedValueOnce();
+
       await expect(
         service.addPrivateViewableTweetToZSet(
           groupId,
           tweetId,
+          authorId,
           hashtags,
           category,
+          location,
           creationTimestamp,
         ),
-      ).rejects.toThrowError('Could not add public tweet to ZSET');
-      expect(mockRedisClient.zadd).toHaveBeenCalledWith(
-        expectedKey,
+      ).resolves.toBeUndefined();
+
+      expect(service.addItemToZset).toHaveBeenCalledWith(
+        key,
+        memberItem,
         creationTimestamp,
-        expectedMemberItem,
+        ttl,
       );
-      expect(mockRedisClient.expire).toHaveBeenCalledWith(
-        expectedKey,
-        CacheKeysTTLs.PRIVATE_GROUP_VIEWABLE_TWEETS_ZSET,
+    });
+
+    it('should throw an error if addItemToZset fails', async () => {
+      const groupId = 123;
+      const tweetId = '456';
+      const authorId = 789;
+      const hashtags = ['tag1', 'tag2'];
+      const category = 'Tech';
+      const location = 'NYC';
+      const creationTimestamp = 1678901234; // Example timestamp
+      const parentTweetId = '789';
+
+      jest
+        .spyOn(service, 'addItemToZset')
+        .mockRejectedValueOnce(new Error('Redis error'));
+
+      await expect(
+        service.addPrivateViewableTweetToZSet(
+          groupId,
+          tweetId,
+          authorId,
+          hashtags,
+          category,
+          location,
+          creationTimestamp,
+          parentTweetId,
+        ),
+      ).rejects.toThrow('Redis error');
+
+      const infix = TweetAtrrsJoinInfix;
+      const parentTweetIdStr = parentTweetId ? parentTweetId.toString() : '-1';
+      const memberItem = `${tweetId}${infix}${authorId.toString()}${infix}${hashtags.join('_')}${infix}${category}${infix}${location}${infix}${parentTweetIdStr}`;
+      const key = `${CacheKeys.PRIVATE_GROUP_VIEWABLE_TWEETS_ZSET_PREFIX}${groupId.toString()}`;
+      const ttl = CacheKeysTTLs.PRIVATE_GROUP_VIEWABLE_TWEETS_ZSET;
+
+      expect(service.addItemToZset).toHaveBeenCalledWith(
+        key,
+        memberItem,
+        creationTimestamp,
+        ttl,
       );
     });
   });
@@ -717,186 +1144,180 @@ describe('CacheService', () => {
   });
 
   describe('paginatePublicTweetIds', () => {
-    it('should return an array of items with scores', async () => {
-      // Mocking Redis response
-      const mockRedisResponse = ['tweet1', '150', 'tweet2', '145'];
-      mockRedisClient.zrevrangebyscore.mockResolvedValue(mockRedisResponse);
+    it('should return parsed tweet keys from paginateZset results', async () => {
+      const creationTimestampFrom = 1637720000;
+      const creationTimestampTo = 1637729999;
+      const offset = 0;
+      const limit = 10;
 
-      const result = await service.paginatePublicTweetIds(100, 200, 0, 10);
+      // Example mock results from paginateZset
+      const infix = TweetAtrrsJoinInfix;
+      const mockZsetResults = [
+        {
+          item: `tweetId1${infix}123${infix}hashtag1${infix}Sport${infix}Location1${infix}-1`,
+          score: 1637721323,
+        },
+        {
+          item: `tweetId2${infix}123${infix}hashtag2${infix}Sport${infix}Location1${infix}tweetId1`,
+          score: 1637724321,
+        },
+      ];
 
-      expect(result).toEqual([
-        { item: 'tweet1', score: 150 },
-        { item: 'tweet2', score: 145 },
-      ]);
-      expect(mockRedisClient.zrevrangebyscore).toHaveBeenCalledWith(
-        CacheKeys.PUBLIC_VIEWABLE_TWEETS_ZSET,
-        200,
-        100,
-        'WITHSCORES',
-        'LIMIT',
-        0,
-        10,
+      // Mock paginateZset to return the mockZsetResults
+      jest.spyOn(service, 'paginateZset').mockResolvedValue(mockZsetResults);
+
+      // Mock parsePaginateZsetResults to return the expected TweetKey format
+      const mockParsedResults = [
+        {
+          id: 'tweetId1',
+          authorId: 123,
+          parentTweetId: null,
+          hashtags: ['hashtag1'],
+          creationTimeStamp: 1637721323,
+          category: 'Sport',
+          location: 'Location1',
+        },
+        {
+          id: 'tweetId2',
+          authorId: 123,
+          parentTweetId: 'tweetId1',
+          hashtags: ['hashtag2'],
+          creationTimeStamp: 1637724321,
+          category: 'Sport',
+          location: 'Location1',
+        },
+      ];
+      jest
+        .spyOn(service, 'parsePaginateZsetResults')
+        .mockResolvedValue(mockParsedResults);
+
+      const result = await service.paginatePublicTweetIds(
+        creationTimestampFrom,
+        creationTimestampTo,
+        offset,
+        limit,
       );
+
+      expect(service.paginateZset).toHaveBeenCalledWith(
+        CacheKeys.PUBLIC_VIEWABLE_TWEETS_ZSET,
+        creationTimestampFrom,
+        creationTimestampTo,
+        offset,
+        limit,
+      );
+
+      expect(service.parsePaginateZsetResults).toHaveBeenCalledWith(
+        mockZsetResults,
+      );
+      expect(result).toEqual(mockParsedResults);
     });
 
-    it('should return an empty array if no members are found', async () => {
-      mockRedisClient.zrevrangebyscore.mockResolvedValue([]);
+    it('should return empty array if paginateZset returns no results', async () => {
+      const creationTimestampFrom = 1637720000;
+      const creationTimestampTo = 1637729999;
+      const offset = 0;
+      const limit = 10;
 
-      const result = await service.paginatePublicTweetIds(100, 200, 0, 10);
+      // Mock paginateZset to return no results
+      jest.spyOn(service, 'paginateZset').mockResolvedValue([]);
 
-      expect(result).toEqual([]);
-      expect(mockRedisClient.zrevrangebyscore).toHaveBeenCalledWith(
-        CacheKeys.PUBLIC_VIEWABLE_TWEETS_ZSET,
-        200,
-        100,
-        'WITHSCORES',
-        'LIMIT',
-        0,
-        10,
+      const result = await service.paginatePublicTweetIds(
+        creationTimestampFrom,
+        creationTimestampTo,
+        offset,
+        limit,
       );
+
+      expect(result).toEqual([]); // Should return an empty array
     });
 
-    it('should throw an error if Redis operation fails', async () => {
-      mockRedisClient.zrevrangebyscore.mockRejectedValue(
-        new Error('Redis error'),
-      );
+    it('should throw an error if paginateZset fails', async () => {
+      const creationTimestampFrom = 1637720000;
+      const creationTimestampTo = 1637729999;
+      const offset = 0;
+      const limit = 10;
+
+      // Mock paginateZset to throw an error
+      jest
+        .spyOn(service, 'paginateZset')
+        .mockRejectedValue(new Error('Error fetching data'));
 
       await expect(
-        service.paginatePublicTweetIds(100, 200, 0, 10),
-      ).rejects.toThrow('Could not find items from Zset');
-      expect(mockRedisClient.zrevrangebyscore).toHaveBeenCalledWith(
-        CacheKeys.PUBLIC_VIEWABLE_TWEETS_ZSET,
-        200,
-        100,
-        'WITHSCORES',
-        'LIMIT',
-        0,
-        10,
-      );
-    });
-
-    it('should handle a mix of items and scores correctly', async () => {
-      // Mock Redis response with more items
-      const mockRedisResponse = [
-        'tweet1',
-        '150',
-        'tweet2',
-        '145',
-        'tweet3',
-        '140',
-      ];
-      mockRedisClient.zrevrangebyscore.mockResolvedValue(mockRedisResponse);
-
-      const result = await service.paginatePublicTweetIds(100, 200, 0, 10);
-
-      expect(result).toEqual([
-        { item: 'tweet1', score: 150 },
-        { item: 'tweet2', score: 145 },
-        { item: 'tweet3', score: 140 },
-      ]);
+        service.paginatePublicTweetIds(
+          creationTimestampFrom,
+          creationTimestampTo,
+          offset,
+          limit,
+        ),
+      ).rejects.toThrow('Error fetching data');
     });
   });
 
   describe('paginatePrivateTweetIds', () => {
-    it('should return an array of items with scores', async () => {
-      // Mocking Redis response
-      const mockRedisResponse = ['tweet1', '150', 'tweet2', '145'];
-      mockRedisClient.zrevrangebyscore.mockResolvedValue(mockRedisResponse);
-
+    it('should return parsed tweet keys from paginateZset results', async () => {
       const groupId = 1;
-      const result = await service.paginatePrivateTweetIds(
-        groupId,
-        100,
-        200,
-        0,
-        10,
-      );
+      const creationTimestampFrom = 1637720000;
+      const creationTimestampTo = 1637729999;
+      const offset = 0;
+      const limit = 10;
 
-      expect(result).toEqual([
-        { item: 'tweet1', score: 150 },
-        { item: 'tweet2', score: 145 },
-      ]);
-      expect(mockRedisClient.zrevrangebyscore).toHaveBeenCalledWith(
-        `${CacheKeys.PRIVATE_GROUP_VIEWABLE_TWEETS_ZSET_PREFIX}${groupId.toString()}`,
-        200,
-        100,
-        'WITHSCORES',
-        'LIMIT',
-        0,
-        10,
-      );
-    });
-
-    it('should return an empty array if no members are found', async () => {
-      mockRedisClient.zrevrangebyscore.mockResolvedValue([]);
-
-      const groupId = 1;
-      const result = await service.paginatePrivateTweetIds(
-        groupId,
-        100,
-        200,
-        0,
-        10,
-      );
-
-      expect(result).toEqual([]);
-      expect(mockRedisClient.zrevrangebyscore).toHaveBeenCalledWith(
-        `${CacheKeys.PRIVATE_GROUP_VIEWABLE_TWEETS_ZSET_PREFIX}${groupId.toString()}`,
-        200,
-        100,
-        'WITHSCORES',
-        'LIMIT',
-        0,
-        10,
-      );
-    });
-
-    it('should throw an error if Redis operation fails', async () => {
-      mockRedisClient.zrevrangebyscore.mockRejectedValue(
-        new Error('Redis error'),
-      );
-
-      const groupId = 1;
-      await expect(
-        service.paginatePrivateTweetIds(groupId, 100, 200, 0, 10),
-      ).rejects.toThrow('Could not find items from Zset');
-      expect(mockRedisClient.zrevrangebyscore).toHaveBeenCalledWith(
-        `${CacheKeys.PRIVATE_GROUP_VIEWABLE_TWEETS_ZSET_PREFIX}${groupId.toString()}`,
-        200,
-        100,
-        'WITHSCORES',
-        'LIMIT',
-        0,
-        10,
-      );
-    });
-
-    it('should handle a mix of items and scores correctly', async () => {
-      // Mock Redis response with more items
-      const mockRedisResponse = [
-        'tweet1',
-        '150',
-        'tweet2',
-        '145',
-        'tweet3',
-        '140',
+      // Example mock results from paginateZset
+      const mockZsetResults = [
+        { item: 'tweetId1_123_hashtag1_Sport_Location1_-1', score: 1637721323 },
+        {
+          item: 'tweetId2_123_hashtag2_Sport_Location1_tweetId1',
+          score: 1637724321,
+        },
       ];
-      mockRedisClient.zrevrangebyscore.mockResolvedValue(mockRedisResponse);
 
-      const groupId = 1;
+      // Mock paginateZset to return the mockZsetResults
+      jest.spyOn(service, 'paginateZset').mockResolvedValue(mockZsetResults);
+
+      // Mock parsePaginateZsetResults to return the expected TweetKey format
+      const mockParsedResults = [
+        {
+          id: 'tweetId1',
+          authorId: 123,
+          parentTweetId: null,
+          hashtags: ['hashtag1'],
+          creationTimeStamp: 1637721323,
+          category: 'Sport',
+          location: 'Location1',
+        },
+        {
+          id: 'tweetId2',
+          authorId: 123,
+          parentTweetId: 'tweetId1',
+          hashtags: ['hashtag2'],
+          creationTimeStamp: 1637724321,
+          category: 'Sport',
+          location: 'Location1',
+        },
+      ];
+      jest
+        .spyOn(service, 'parsePaginateZsetResults')
+        .mockResolvedValue(mockParsedResults);
+
       const result = await service.paginatePrivateTweetIds(
         groupId,
-        100,
-        200,
-        0,
-        10,
+        creationTimestampFrom,
+        creationTimestampTo,
+        offset,
+        limit,
       );
 
-      expect(result).toEqual([
-        { item: 'tweet1', score: 150 },
-        { item: 'tweet2', score: 145 },
-        { item: 'tweet3', score: 140 },
-      ]);
+      expect(service.paginateZset).toHaveBeenCalledWith(
+        `${CacheKeys.PRIVATE_GROUP_VIEWABLE_TWEETS_ZSET_PREFIX}${groupId}`,
+        creationTimestampFrom,
+        creationTimestampTo,
+        offset,
+        limit,
+      );
+
+      expect(service.parsePaginateZsetResults).toHaveBeenCalledWith(
+        mockZsetResults,
+      );
+      expect(result).toEqual(mockParsedResults);
     });
   });
 });

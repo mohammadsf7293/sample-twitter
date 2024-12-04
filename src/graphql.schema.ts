@@ -46,6 +46,14 @@ export class UpdateTweetPermissions {
     editPermissionsGroupIds: number[];
 }
 
+export class FilterTweet {
+    authorId?: Nullable<string>;
+    hashtag?: Nullable<string>;
+    parentTweetId?: Nullable<string>;
+    category?: Nullable<TweetCategory>;
+    location?: Nullable<string>;
+}
+
 export class CreateUserInput {
     userName?: Nullable<string>;
     firstName?: Nullable<string>;
@@ -65,7 +73,7 @@ export abstract class IQuery {
 
     abstract canEditTweet(userId: number, tweetId: string): boolean | Promise<boolean>;
 
-    abstract paginateTweets(userId: number, limit: number, page: number): PaginatedTweets | Promise<PaginatedTweets>;
+    abstract paginateTweets(userId: number, limit: number, page: number, filter?: Nullable<FilterTweet>): PaginatedTweets | Promise<PaginatedTweets>;
 
     abstract users(): Nullable<Nullable<User>[]> | Promise<Nullable<Nullable<User>[]>>;
 

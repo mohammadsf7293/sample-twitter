@@ -16,3 +16,5 @@ export const CacheKeysTTLs = {
   GROUP_EDITABLE_TWEET: 30 * DAY_TTL,
   PRIVATE_GROUP_VIEWABLE_TWEETS_ZSET: 30 * DAY_TTL,
 };
+
+export const TweetAtrrsJoinInfix = ':::';

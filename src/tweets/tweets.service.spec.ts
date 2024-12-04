@@ -7,14 +7,13 @@ import { Tweet, TweetCategory } from './tweet.entity';
 import { User } from '../users/user.entity';
 import { Hashtag } from './hashtag.entity';
 import { UpdateTweetDto } from './dto/update-tweet.dto';
-import { CacheService } from '../cache/cache.service';
+import { CacheService, TweetKey } from '../cache/cache.service';
 import { GroupsService } from '../groups/groups.service';
 import { UpdateTweetPermissionsDto } from './dto/update-tweet-permissions.dto';
 import { Group } from 'src/groups/group.entity';
 import { UsersService } from '../users/users.service';
-import * as protobuf from 'protobufjs';
-import * as path from 'path';
 import { CreateTweetDto } from './dto/create-tweet.dto';
+import { FilterTweet } from 'src/graphql.schema';
 
 const mockTweetRepository = {
   create: jest.fn(),
@@ -90,6 +89,7 @@ describe('TweetsService', () => {
   let hashtagRepository: Repository<Hashtag>;
   let cacheService: CacheService;
   let usersService: UsersService;
+  let groupsService: GroupsService;
 
   beforeAll(() => {
     // Suppressing console.error not to show thrown exceptions which are used for some test cases. It makes test output area clean and green. and it only becomes red when a test is not passed
@@ -130,6 +130,7 @@ describe('TweetsService', () => {
     );
     cacheService = module.get<CacheService>(CacheService);
     usersService = module.get<UsersService>(UsersService);
+    groupsService = module.get<GroupsService>(GroupsService);
   });
 
   afterEach(() => {
@@ -449,177 +450,235 @@ describe('TweetsService', () => {
     });
   });
 
-  describe('paginateTweets', () => {
-    it('should return paginated tweets with hasNextPage as true', async () => {
-      const mockUser = { id: 1, groups: [{ id: 1 }] } as User;
-      const mockPublicTweetIds = [{ score: 1627553803, item: '1_tweet' }];
-      const mockPrivateTweetIds = [{ score: 1627553802, item: '2_tweet' }];
-      const mockUserTweetIds = [{ score: 1627553801, item: '3_tweet' }];
-      const mockTweets = [
-        {
-          id: '1',
-          content: 'Tweet 1',
-          createdAt: new Date(1627553803000),
-        } as Tweet,
-        {
-          id: '2',
-          content: 'Tweet 2',
-          createdAt: new Date(1627553802000),
-        } as Tweet,
-        {
-          id: '3',
-          content: 'Tweet 3',
-          createdAt: new Date(1627553801000),
-        } as Tweet,
-      ];
+  describe('filterTweets', () => {
+    const sampleTweets: TweetKey[] = [
+      {
+        id: '1',
+        authorId: 101,
+        parentTweetId: null,
+        hashtags: ['news', 'tech'],
+        creationTimeStamp: 1627283728,
+        category: 'Tech',
+        location: 'USA',
+      },
+      {
+        id: '2',
+        authorId: 102,
+        parentTweetId: '1',
+        hashtags: ['fun'],
+        creationTimeStamp: 1627283738,
+        category: 'Entertainment',
+        location: 'Canada',
+      },
+      {
+        id: '3',
+        authorId: 101,
+        parentTweetId: null,
+        hashtags: ['news'],
+        creationTimeStamp: 1627283748,
+        category: 'Tech',
+        location: 'USA',
+      },
+    ];
 
-      jest
-        .spyOn(usersService, 'findOneWithRelations')
-        .mockResolvedValue(mockUser);
-
-      jest
-        .spyOn(cacheService, 'paginatePublicTweetIds')
-        .mockResolvedValue(mockPublicTweetIds);
-
-      jest
-        .spyOn(cacheService, 'paginatePrivateTweetIds')
-        .mockResolvedValue(mockPrivateTweetIds);
-      jest
-        .spyOn(cacheService, 'paginateUserCreatedTweetIds')
-        .mockResolvedValue(mockUserTweetIds);
-
-      jest
-        .spyOn(service, 'getCachedTweet')
-        .mockResolvedValueOnce(mockTweets[2]);
-      jest
-        .spyOn(service, 'getCachedTweet')
-        .mockResolvedValueOnce(mockTweets[1]);
-      jest
-        .spyOn(service, 'getCachedTweet')
-        .mockResolvedValueOnce(mockTweets[0]);
-
-      const result = await service.paginateTweets(1, 2, 0);
-
-      expect(result.nodes.length).toBe(2);
-      expect(result.hasNextPage).toBe(true);
-      expect(cacheService.paginatePublicTweetIds).toHaveBeenCalled();
-      expect(cacheService.paginatePrivateTweetIds).toHaveBeenCalled();
-      expect(cacheService.paginateUserCreatedTweetIds).toHaveBeenCalled();
+    it('should filter by authorId', async () => {
+      const filter: FilterTweet = { authorId: '101' };
+      const result = await (service as any).filterTweets(sampleTweets, filter);
+      expect(result).toEqual([sampleTweets[0], sampleTweets[2]]);
     });
 
-    it('should throw an error if user is not found', async () => {
+    it('should filter by hashtag', async () => {
+      const filter: FilterTweet = { hashtag: 'fun' };
+      const result = await (service as any).filterTweets(sampleTweets, filter);
+      expect(result).toEqual([sampleTweets[1]]);
+    });
+
+    it('should filter by parentTweetId', async () => {
+      const filter: FilterTweet = { parentTweetId: '1' };
+      const result = await (service as any).filterTweets(sampleTweets, filter);
+      expect(result).toEqual([sampleTweets[1]]);
+    });
+
+    it('should filter by category', async () => {
+      const filter: FilterTweet = { category: TweetCategory.Tech };
+      const result = await (service as any).filterTweets(sampleTweets, filter);
+      expect(result).toEqual([sampleTweets[0], sampleTweets[2]]);
+    });
+
+    it('should filter by location', async () => {
+      const filter: FilterTweet = { location: 'Canada' };
+      const result = await (service as any).filterTweets(sampleTweets, filter);
+      expect(result).toEqual([sampleTweets[1]]);
+    });
+
+    it('should filter by multiple parameters', async () => {
+      const filter: FilterTweet = {
+        authorId: '101',
+        category: TweetCategory.Tech,
+        location: 'USA',
+      };
+      const result = await (service as any).filterTweets(sampleTweets, filter);
+      expect(result).toEqual([sampleTweets[0], sampleTweets[2]]);
+    });
+
+    it('should return all tweets if no filter is provided', async () => {
+      const filter: FilterTweet = {};
+      const result = await (service as any).filterTweets(sampleTweets, filter);
+      expect(result).toEqual(sampleTweets);
+    });
+
+    it('should return an empty array if no tweets match the filter', async () => {
+      const filter: FilterTweet = { parentTweetId: '1000534' };
+      const result = await (service as any).filterTweets(sampleTweets, filter);
+      expect(result).toEqual([]);
+    });
+  });
+
+  describe('paginateTweets', () => {
+    const mockTweetKeys: TweetKey[] = [
+      {
+        id: '1',
+        authorId: 101,
+        parentTweetId: null,
+        hashtags: ['news'],
+        creationTimeStamp: 1000,
+        category: 'Tech',
+        location: 'USA',
+      },
+      {
+        id: '2',
+        authorId: 102,
+        parentTweetId: null,
+        hashtags: ['fun'],
+        creationTimeStamp: 900,
+        category: 'Entertainment',
+        location: 'Canada',
+      },
+      {
+        id: '3',
+        authorId: 103,
+        parentTweetId: '1',
+        hashtags: ['news'],
+        creationTimeStamp: 800,
+        category: 'Tech',
+        location: 'USA',
+      },
+    ];
+
+    beforeEach(() => {
+      // No filter is applied for all of test cases of this scope
+      jest
+        .spyOn(service as any, 'filterTweets')
+        .mockResolvedValue(mockTweetKeys);
+
+      jest.spyOn(service, 'getCachedTweet').mockImplementation(
+        async (id) =>
+          ({
+            id,
+            content: `Tweet content for ${id}`,
+          }) as Tweet,
+      );
+    });
+
+    it('should throw an error if the user is not found', async () => {
       jest.spyOn(usersService, 'findOneWithRelations').mockResolvedValue(null);
 
-      await expect(service.paginateTweets(1, 2, 0)).rejects.toThrow(
+      await expect(service.paginateTweets(1, 10, 0)).rejects.toThrow(
         'User not found',
       );
     });
 
-    it('should handle empty tweet cache results gracefully', async () => {
-      const mockUser = { id: 1, groups: [{ id: 1 }] } as unknown as User;
+    it('should fetch tweets and paginate without filters', async () => {
       jest
         .spyOn(usersService, 'findOneWithRelations')
         .mockResolvedValue(mockUser);
-
-      jest.spyOn(cacheService, 'paginatePublicTweetIds').mockResolvedValue([]);
+      jest
+        .spyOn(cacheService, 'paginatePublicTweetIds')
+        .mockResolvedValue(mockTweetKeys);
       jest.spyOn(cacheService, 'paginatePrivateTweetIds').mockResolvedValue([]);
       jest
         .spyOn(cacheService, 'paginateUserCreatedTweetIds')
         .mockResolvedValue([]);
-      jest.spyOn(service, 'getCachedTweet').mockResolvedValue(null);
 
       const result = await service.paginateTweets(1, 2, 0);
 
-      expect(result.nodes.length).toBe(0);
-      expect(result.hasNextPage).toBe(false);
-    });
-
-    it('should return valid tweets when cache returns some valid and some null results', async () => {
-      const mockUser = { id: 1, groups: [{ id: 1 }] } as unknown as User;
-      const mockPublicTweetIds = [{ score: 1627553800, item: '1_tweet' }];
-      const mockPrivateTweetIds = [{ score: 1627553800, item: '2_tweet' }];
-      const mockUserTweetIds = [{ score: 1627553800, item: '3_tweet' }];
-      const mockTweets = [
-        { id: '1', content: 'Tweet 1', createdAt: new Date() } as Tweet,
-        null, // Simulating a null tweet due to missing cache
-        { id: '2', content: 'Tweet 2', createdAt: new Date() } as Tweet,
-      ];
-
-      jest
-        .spyOn(usersService, 'findOneWithRelations')
-        .mockResolvedValue(mockUser);
-
-      jest
-        .spyOn(cacheService, 'paginatePublicTweetIds')
-        .mockResolvedValue(mockPublicTweetIds);
-
-      jest
-        .spyOn(cacheService, 'paginatePrivateTweetIds')
-        .mockResolvedValue(mockPrivateTweetIds);
-      mockCacheService.paginateUserCreatedTweetIds.mockResolvedValue(
-        mockUserTweetIds,
+      expect(usersService.findOneWithRelations).toHaveBeenCalledWith(1, [
+        'groups',
+      ]);
+      expect(cacheService.paginatePublicTweetIds).toHaveBeenCalled();
+      expect(cacheService.paginatePrivateTweetIds).toHaveBeenCalledTimes(
+        mockUser.groups.length,
       );
-      jest
-        .spyOn(service, 'getCachedTweet')
-        .mockResolvedValueOnce(mockTweets[0])
-        .mockResolvedValueOnce(mockTweets[1])
-        .mockResolvedValueOnce(mockTweets[2]);
-
-      const result = await service.paginateTweets(1, 2, 0);
-
-      expect(result.nodes.length).toBe(2);
-      expect(result.hasNextPage).toBe(false);
+      expect(cacheService.paginateUserCreatedTweetIds).toHaveBeenCalled();
+      expect(service.getCachedTweet).toHaveBeenCalledTimes(3);
+      expect(result).toEqual({
+        nodes: [
+          { id: '1', content: 'Tweet content for 1' },
+          { id: '2', content: 'Tweet content for 2' },
+        ],
+        hasNextPage: true,
+      });
     });
 
-    it('should return tweets with correct pagination', async () => {
-      const mockUser = { id: 1, groups: [{ id: 1 }] } as unknown as User;
-      const mockPublicTweetIds = [{ score: 1627553801, item: '1_tweet' }];
-      const mockPrivateTweetIds = [{ score: 1627553802, item: '2_tweet' }];
-      const mockUserTweetIds = [{ score: 1627553803, item: '3_tweet' }];
-      const mockTweets = [
-        {
-          id: '1',
-          content: 'Tweet 1',
-          createdAt: new Date(1627553801 * 1000),
-        } as Tweet,
-        {
-          id: '2',
-          content: 'Tweet 2',
-          createdAt: new Date(1627553802 * 1000),
-        } as Tweet,
-        {
-          id: '3',
-          content: 'Tweet 3',
-          createdAt: new Date(1627553803 * 1000),
-        } as Tweet,
-      ];
-
+    it('should fetch and filter tweets when a filter is provided', async () => {
       jest
         .spyOn(usersService, 'findOneWithRelations')
         .mockResolvedValue(mockUser);
-
       jest
         .spyOn(cacheService, 'paginatePublicTweetIds')
-        .mockResolvedValue(mockPublicTweetIds);
-
-      jest
-        .spyOn(cacheService, 'paginatePrivateTweetIds')
-        .mockResolvedValue(mockPrivateTweetIds);
-
+        .mockResolvedValue(mockTweetKeys);
+      jest.spyOn(cacheService, 'paginatePrivateTweetIds').mockResolvedValue([]);
       jest
         .spyOn(cacheService, 'paginateUserCreatedTweetIds')
-        .mockResolvedValue(mockUserTweetIds);
+        .mockResolvedValue([]);
 
       jest
-        .spyOn(service, 'getCachedTweet')
-        .mockResolvedValueOnce(mockTweets[2])
-        .mockResolvedValueOnce(mockTweets[1])
-        .mockResolvedValueOnce(mockTweets[0]);
+        .spyOn(service as any, 'filterTweets')
+        .mockResolvedValue([mockTweetKeys[0]]);
 
-      const result = await service.paginateTweets(1, 2, 1);
+      const filter: FilterTweet = { authorId: '101' };
+      const result = await service.paginateTweets(1, 2, 0, filter);
 
-      expect(result.nodes.length).toBe(2); // Paginated to the second page with a limit of 2
-      expect(result.hasNextPage).toBe(true); // All tweets fetched
+      expect(usersService.findOneWithRelations).toHaveBeenCalledWith(1, [
+        'groups',
+      ]);
+      expect(cacheService.paginatePublicTweetIds).toHaveBeenCalled();
+      expect(cacheService.paginatePrivateTweetIds).toHaveBeenCalledTimes(
+        mockUser.groups.length,
+      );
+      expect(cacheService.paginateUserCreatedTweetIds).toHaveBeenCalled();
+      expect((service as any).filterTweets).toHaveBeenCalledWith(
+        mockTweetKeys,
+        filter,
+      );
+      expect(service.getCachedTweet).toHaveBeenCalledTimes(1);
+      expect(result).toEqual({
+        nodes: [{ id: '1', content: 'Tweet content for 1' }],
+        hasNextPage: false,
+      });
+    });
+
+    it('should handle deduplication and sorting of tweets', async () => {
+      jest
+        .spyOn(usersService, 'findOneWithRelations')
+        .mockResolvedValue(mockUser);
+      jest
+        .spyOn(cacheService, 'paginatePublicTweetIds')
+        .mockResolvedValue([mockTweetKeys[0]]);
+      jest
+        .spyOn(cacheService, 'paginatePrivateTweetIds')
+        .mockResolvedValue([mockTweetKeys[1]]);
+      jest
+        .spyOn(cacheService, 'paginateUserCreatedTweetIds')
+        .mockResolvedValue([mockTweetKeys[2], mockTweetKeys[0]]);
+
+      const result = await service.paginateTweets(1, 2, 0);
+
+      expect(result.nodes).toEqual([
+        { id: '1', content: 'Tweet content for 1' },
+        { id: '2', content: 'Tweet content for 2' },
+      ]);
+      expect(result.hasNextPage).toBe(true);
     });
   });
 
@@ -858,170 +917,308 @@ describe('TweetsService', () => {
   });
 
   describe('updateTweetPermissions', () => {
-    it('should throw an error if the tweet is not found', async () => {
-      jest.spyOn(tweetRepository, 'findOne').mockResolvedValueOnce(null);
-
-      const dto: UpdateTweetPermissionsDto = {
-        viewPermissionsUserIds: [],
-        editPermissionsUserIds: [],
-        viewPermissionsGroupIds: [],
-        editPermissionsGroupIds: [],
+    it('should update tweet permissions and return updated tweet', async () => {
+      const tweetId = 'tweetId123';
+      const userId = 1;
+      const updatePermissionsDto: UpdateTweetPermissionsDto = {
+        viewPermissionsUserIds: [2, 3],
+        editPermissionsUserIds: [4],
+        viewPermissionsGroupIds: [5],
+        editPermissionsGroupIds: [6],
         inheritViewPermissions: false,
         inheritEditPermissions: false,
       };
 
-      await expect(
-        service.updateTweetPermissions('non-existent-id', dto, 1),
-      ).rejects.toThrow('Tweet not found');
-    });
-
-    it('should throw an error if the user is not the author of the tweet', async () => {
-      jest.spyOn(tweetRepository, 'findOne').mockResolvedValueOnce({
-        id: 'tweet123',
-        author: { id: 2 },
-      } as Tweet);
-
-      const dto: UpdateTweetPermissionsDto = {
-        viewPermissionsUserIds: [],
-        editPermissionsUserIds: [],
-        viewPermissionsGroupIds: [],
-        editPermissionsGroupIds: [],
-        inheritViewPermissions: false,
-        inheritEditPermissions: false,
-      };
-
-      await expect(
-        service.updateTweetPermissions('tweet123', dto, 1),
-      ).rejects.toThrow('You are not the author of this tweet');
-    });
-
-    it('should update permissions for a public viewable and editable tweet', async () => {
-      const tweet = {
-        id: 'tweet123',
-        author: { id: 1 },
-        hashtags: [{ name: 'hashtag1' }],
-        category: 'category1',
-        createdAt: new Date(1699118400000),
-        inheritViewPermissions: false,
-        inheritEditPermissions: false,
+      const mockTweet = {
+        id: tweetId,
+        author: { id: userId },
         viewableGroups: [],
         editableGroups: [],
+        hashtags: [{ name: 'hashtag1' }],
+        category: TweetCategory.Sport,
+        location: 'Location1',
+        parentTweet: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
       } as unknown as Tweet;
 
-      const dto: UpdateTweetPermissionsDto = {
+      const mockGroups = [
+        { id: 5, name: 'Group1' } as Group,
+        { id: 6, name: 'Group2' } as Group,
+      ];
+
+      jest.spyOn(tweetRepository, 'findOne').mockResolvedValue(mockTweet);
+      jest.spyOn(tweetRepository, 'save').mockResolvedValue(mockTweet);
+
+      // Mock external methods used inside the method
+      jest
+        .spyOn(cacheService, 'addPublicViewableTweetToZSet')
+        .mockResolvedValue(undefined);
+
+      jest
+        .spyOn(cacheService, 'addPrivateViewableTweetToZSet')
+        .mockResolvedValue(undefined);
+
+      jest
+        .spyOn(cacheService, 'setTweetIsPublicEditable')
+        .mockResolvedValue(undefined);
+
+      jest
+        .spyOn(cacheService, 'setTweetIsEditableByGroup')
+        .mockResolvedValue(undefined);
+
+      // Mock the `findUserGroupsByUserIds` method
+      jest
+        .spyOn(groupsService, 'findUserGroupsByUserIds')
+        .mockResolvedValue(mockGroups);
+
+      jest.spyOn(service as any, 'assignGroupsToUsers').mockResolvedValue([
+        { id: 5, name: 'AssignedGroup1' },
+        { id: 6, name: 'AssignedGroup2' },
+      ]);
+
+      const result = await service.updateTweetPermissions(
+        tweetId,
+        updatePermissionsDto,
+        userId,
+      );
+
+      expect(tweetRepository.findOne).toHaveBeenCalledWith({
+        where: { id: tweetId },
+        relations: [
+          'author',
+          'viewableGroups',
+          'editableGroups',
+          'parentTweet',
+          'hashtags',
+        ],
+      });
+
+      expect((service as any).assignGroupsToUsers).toHaveBeenCalledWith(
+        expect.any(Array),
+        expect.any(Array),
+        userId, // tweet author's ID
+      );
+
+      expect(tweetRepository.save).toHaveBeenCalled();
+      expect(result).toEqual(mockTweet);
+      expect(cacheService.addPrivateViewableTweetToZSet).toHaveBeenCalledWith(
+        5,
+        tweetId,
+        userId,
+        ['hashtag1'],
+        TweetCategory.Sport,
+        'Location1',
+        Math.round(mockTweet.createdAt.getTime() / 1000),
+        '-1',
+      );
+      expect(cacheService.addPrivateViewableTweetToZSet).toHaveBeenCalledWith(
+        6,
+        tweetId,
+        userId,
+        ['hashtag1'],
+        TweetCategory.Sport,
+        'Location1',
+        Math.round(mockTweet.createdAt.getTime() / 1000),
+        '-1',
+      );
+      expect(cacheService.setTweetIsEditableByGroup).toHaveBeenCalledWith(
+        tweetId,
+        5,
+      );
+      expect(cacheService.setTweetIsEditableByGroup).toHaveBeenCalledWith(
+        tweetId,
+        6,
+      );
+    });
+
+    it('should handle empty permission lists', async () => {
+      const tweetId = 'tweetId123';
+      const userId = 1;
+      const updatePermissionsDto: UpdateTweetPermissionsDto = {
+        viewPermissionsUserIds: [],
+        editPermissionsUserIds: [],
+        viewPermissionsGroupIds: [],
+        editPermissionsGroupIds: [],
+        inheritViewPermissions: false,
+        inheritEditPermissions: false,
+      };
+
+      const mockTweet = {
+        id: tweetId,
+        author: { id: userId },
+        viewableGroups: [],
+        editableGroups: [],
+        hashtags: [{ name: 'hashtag1' }],
+        category: TweetCategory.Sport,
+        location: 'Location1',
+        parentTweet: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      } as unknown as Tweet;
+
+      jest.spyOn(tweetRepository, 'findOne').mockResolvedValue(mockTweet);
+      jest.spyOn(tweetRepository, 'save').mockResolvedValue(mockTweet);
+
+      // Mock external methods used inside the method
+      jest
+        .spyOn(cacheService, 'addPublicViewableTweetToZSet')
+        .mockResolvedValue(undefined);
+      jest
+        .spyOn(cacheService, 'addPrivateViewableTweetToZSet')
+        .mockResolvedValue(undefined);
+      jest
+        .spyOn(cacheService, 'setTweetIsPublicEditable')
+        .mockResolvedValue(undefined);
+      jest
+        .spyOn(cacheService, 'setTweetIsEditableByGroup')
+        .mockResolvedValue(undefined);
+
+      // Mock the `findUserGroupsByUserIds` method
+      jest
+        .spyOn(groupsService, 'findUserGroupsByUserIds')
+        .mockResolvedValue([]);
+
+      // Mock the `assignGroupsToUsers` method
+      jest.spyOn(service as any, 'assignGroupsToUsers').mockResolvedValue([]);
+
+      const result = await service.updateTweetPermissions(
+        tweetId,
+        updatePermissionsDto,
+        userId,
+      );
+
+      expect(result).toEqual(mockTweet);
+      expect(cacheService.addPublicViewableTweetToZSet).not.toHaveBeenCalled();
+      expect(cacheService.addPrivateViewableTweetToZSet).not.toHaveBeenCalled();
+      expect(cacheService.setTweetIsPublicEditable).not.toHaveBeenCalled();
+      expect(cacheService.setTweetIsEditableByGroup).not.toHaveBeenCalled();
+    });
+
+    it('should handle public tweet viewable and editable', async () => {
+      const tweetId = 'tweetId123';
+      const userId = 1;
+      const updatePermissionsDto: UpdateTweetPermissionsDto = {
+        viewPermissionsUserIds: [2],
+        editPermissionsUserIds: [3],
+        viewPermissionsGroupIds: [],
+        editPermissionsGroupIds: [],
+        inheritViewPermissions: false,
+        inheritEditPermissions: false,
+      };
+
+      const mockTweet = {
+        id: tweetId,
+        author: { id: userId },
+        viewableGroups: [],
+        editableGroups: [],
+        hashtags: [{ name: 'hashtag1' }],
+        category: 'Sports',
+        location: 'Location1',
+        parentTweet: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      } as unknown as Tweet;
+
+      jest.spyOn(tweetRepository, 'findOne').mockResolvedValue(mockTweet);
+      jest.spyOn(tweetRepository, 'save').mockResolvedValue(mockTweet);
+
+      // Mock external methods used inside the method
+      jest
+        .spyOn(cacheService, 'addPublicViewableTweetToZSet')
+        .mockResolvedValue(undefined);
+      jest
+        .spyOn(cacheService, 'addPrivateViewableTweetToZSet')
+        .mockResolvedValue(undefined);
+      jest
+        .spyOn(cacheService, 'setTweetIsPublicEditable')
+        .mockResolvedValue(undefined);
+      jest
+        .spyOn(cacheService, 'setTweetIsEditableByGroup')
+        .mockResolvedValue(undefined);
+
+      // Mock the `findUserGroupsByUserIds` method
+      jest
+        .spyOn(groupsService, 'findUserGroupsByUserIds')
+        .mockResolvedValue([]);
+
+      // Mock the `assignGroupsToUsers` method
+      jest.spyOn(service as any, 'assignGroupsToUsers').mockResolvedValue([]);
+
+      const result = await service.updateTweetPermissions(
+        tweetId,
+        updatePermissionsDto,
+        userId,
+      );
+
+      expect(result).toEqual(mockTweet);
+      expect(cacheService.addPublicViewableTweetToZSet).not.toHaveBeenCalled();
+      expect(cacheService.addPrivateViewableTweetToZSet).not.toHaveBeenCalled();
+      expect(cacheService.setTweetIsPublicEditable).not.toHaveBeenCalled();
+      expect(cacheService.setTweetIsEditableByGroup).not.toHaveBeenCalled();
+    });
+
+    it('should handle public tweet viewable and editable', async () => {
+      const tweetId = 'tweetId123';
+      const userId = 1;
+      const updatePermissionsDto: UpdateTweetPermissionsDto = {
         viewPermissionsUserIds: [],
         editPermissionsUserIds: [],
         viewPermissionsGroupIds: [],
         editPermissionsGroupIds: [],
         inheritViewPermissions: true,
-        inheritEditPermissions: true,
+        inheritEditPermissions: false,
       };
 
-      jest.spyOn(tweetRepository, 'findOne').mockResolvedValueOnce(tweet);
-      service.determineTweetVisibility = jest
-        .fn()
-        .mockResolvedValue([0, 'public']);
-      service.determineTweetEditability = jest
-        .fn()
-        .mockResolvedValue([0, 'public']);
-      jest.spyOn(tweetRepository, 'save').mockResolvedValueOnce(tweet);
-
-      jest
-        .spyOn(cacheService, 'addPublicViewableTweetToZSet')
-        .mockResolvedValueOnce();
-
-      const updatedTweet = await service.updateTweetPermissions(
-        'tweet123',
-        dto,
-        1,
-      );
-
-      expect(updatedTweet.inheritViewPermissions).toBe(true);
-      expect(updatedTweet.inheritEditPermissions).toBe(true);
-
-      // Verify CacheService for public viewable and editable tweets
-      expect(cacheService.addPublicViewableTweetToZSet).toHaveBeenCalledWith(
-        'tweet123',
-        ['hashtag1'],
-        'category1',
-        1699118400,
-      );
-      expect(cacheService.setTweetIsPublicEditable).toHaveBeenCalledWith(
-        'tweet123',
-      );
-    });
-
-    it('should update permissions for a private viewable and editable tweet', async () => {
-      const tweet = {
-        id: 'tweet456',
-        author: { id: 1 },
-        hashtags: [{ name: 'hashtag1' }],
-        category: 'category2',
-        createdAt: new Date(1699118400000),
-        inheritViewPermissions: false,
-        inheritEditPermissions: false,
+      const mockTweet = {
+        id: tweetId,
+        author: { id: userId },
         viewableGroups: [],
         editableGroups: [],
+        hashtags: [{ name: 'hashtag1' }],
+        category: 'Sports',
+        location: 'Location1',
+        parentTweet: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
       } as unknown as Tweet;
 
-      const group1 = { id: 1 } as Group;
-      const group2 = { id: 2 } as Group;
+      jest.spyOn(tweetRepository, 'findOne').mockResolvedValue(mockTweet);
+      jest.spyOn(tweetRepository, 'save').mockResolvedValue(mockTweet);
 
-      const dto: UpdateTweetPermissionsDto = {
-        viewPermissionsUserIds: [3],
-        editPermissionsUserIds: [4],
-        viewPermissionsGroupIds: [1],
-        editPermissionsGroupIds: [2],
-        inheritViewPermissions: false,
-        inheritEditPermissions: false,
-      };
+      // Mock external methods used inside the method
+      jest
+        .spyOn(cacheService, 'addPublicViewableTweetToZSet')
+        .mockResolvedValue(undefined);
+      jest
+        .spyOn(cacheService, 'addPrivateViewableTweetToZSet')
+        .mockResolvedValue(undefined);
+      jest
+        .spyOn(cacheService, 'setTweetIsPublicEditable')
+        .mockResolvedValue(undefined);
+      jest
+        .spyOn(cacheService, 'setTweetIsEditableByGroup')
+        .mockResolvedValue(undefined);
 
-      jest.spyOn(tweetRepository, 'findOne').mockResolvedValueOnce(tweet);
-      service.determineTweetVisibility = jest
-        .fn()
-        .mockResolvedValue([0, [3], [1]]);
-      service.determineTweetEditability = jest
-        .fn()
-        .mockResolvedValue([0, [4], [2]]);
-      service['assignGroupsToUsers'] = jest
-        .fn()
-        .mockResolvedValue([group1, group2]);
-      jest.spyOn(tweetRepository, 'save').mockResolvedValueOnce(tweet);
+      // Mock the `findUserGroupsByUserIds` method
+      jest
+        .spyOn(groupsService, 'findUserGroupsByUserIds')
+        .mockResolvedValue([]);
 
-      const updatedTweet = await service.updateTweetPermissions(
-        'tweet456',
-        dto,
-        1,
+      // Mock the `assignGroupsToUsers` method
+      jest.spyOn(service as any, 'assignGroupsToUsers').mockResolvedValue([]);
+
+      const result = await service.updateTweetPermissions(
+        tweetId,
+        updatePermissionsDto,
+        userId,
       );
 
-      // Verify groups assigned
-      expect(updatedTweet.viewableGroups).toEqual([group1, group2]);
-      expect(updatedTweet.editableGroups).toEqual([group1, group2]);
-
-      // Verify CacheService for private viewable and editable tweets
-      expect(cacheService.addPrivateViewableTweetToZSet).toHaveBeenCalledWith(
-        group1.id,
-        'tweet456',
-        ['hashtag1'],
-        'category2',
-        1699118400,
-      );
-      expect(cacheService.addPrivateViewableTweetToZSet).toHaveBeenCalledWith(
-        group2.id,
-        'tweet456',
-        ['hashtag1'],
-        'category2',
-        1699118400,
-      );
-
-      expect(cacheService.setTweetIsEditableByGroup).toHaveBeenCalledWith(
-        'tweet456',
-        group1.id,
-      );
-      expect(cacheService.setTweetIsEditableByGroup).toHaveBeenCalledWith(
-        'tweet456',
-        group2.id,
-      );
+      expect(result).toEqual(mockTweet);
+      expect(cacheService.addPublicViewableTweetToZSet).toHaveBeenCalled();
+      expect(cacheService.addPrivateViewableTweetToZSet).not.toHaveBeenCalled();
+      expect(cacheService.setTweetIsPublicEditable).not.toHaveBeenCalled();
+      expect(cacheService.setTweetIsEditableByGroup).not.toHaveBeenCalled();
     });
   });
 

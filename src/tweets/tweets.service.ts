@@ -1,7 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
-import { Tweet } from './tweet.entity';
+import { Tweet, TweetCategory } from './tweet.entity';
+import { TweetKey } from '../cache/cache.service';
 import { Hashtag } from './hashtag.entity';
 import { CreateTweetDto } from './dto/create-tweet.dto';
 import { UpdateTweetDto } from './dto/update-tweet.dto';
@@ -10,6 +11,7 @@ import { Group } from '../groups/group.entity';
 import { GroupsService } from '../groups/groups.service';
 import { UpdateTweetPermissionsDto } from './dto/update-tweet-permissions.dto';
 import { UsersService } from '../users/users.service';
+import { FilterTweet } from 'src/graphql.schema';
 
 @Injectable()
 export class TweetsService {
@@ -30,6 +32,15 @@ export class TweetsService {
   async create(createTweetDto: CreateTweetDto): Promise<Tweet> {
     const { content, authorId, parentTweetId, hashtags, location, category } =
       createTweetDto;
+
+    // Validate the tweet category
+    if (!Object.values(TweetCategory).includes(category)) {
+      throw new BadRequestException(
+        `Invalid category: ${category}. Accepted categories are: ${Object.values(
+          TweetCategory,
+        ).join(', ')}.`,
+      );
+    }
 
     const author = await this.usersService.findOne(authorId);
     if (!author) {
@@ -87,11 +98,13 @@ export class TweetsService {
 
     // Store tweet to author created tweets cache
     await this.CacheService.addUserCreatedTweetToZSet(
-      savedTweet.author.id,
       savedTweet.id,
+      savedTweet.author.id,
       savedTweet.hashtags.map((hashtag) => hashtag.name),
       savedTweet.category,
+      savedTweet.location,
       Math.round(savedTweet.createdAt.getTime() / 1000),
+      savedTweet.parentTweet ? savedTweet.parentTweet.id : '-1',
     );
 
     return savedTweet;
@@ -150,11 +163,55 @@ export class TweetsService {
     }
   }
 
+  private async filterTweets(
+    tweets: TweetKey[],
+    filter: FilterTweet,
+  ): Promise<TweetKey[]> {
+    return tweets.filter((tweet) => {
+      // Check each filter condition
+      if (filter.authorId && tweet.authorId.toString() !== filter.authorId) {
+        return false;
+      }
+      if (filter.hashtag && !tweet.hashtags.includes(filter.hashtag)) {
+        return false;
+      }
+      if (
+        filter.parentTweetId &&
+        tweet.parentTweetId !== filter.parentTweetId
+      ) {
+        return false;
+      }
+      if (filter.category && tweet.category !== filter.category) {
+        return false;
+      }
+      if (filter.location && tweet.location !== filter.location) {
+        return false;
+      }
+
+      return true; // Include tweet if all conditions pass
+    });
+  }
+
   async paginateTweets(
     userId: number,
     limit: number,
     page: number,
+    filter?: FilterTweet,
   ): Promise<{ nodes: Tweet[]; hasNextPage: boolean }> {
+
+    // Validate the tweet category
+    if (
+      filter &&
+      filter.category &&
+      !Object.values(TweetCategory).includes(filter.category)
+    ) {
+      throw new BadRequestException(
+        `Invalid category: ${filter.category}. Accepted categories are: ${Object.values(
+          TweetCategory,
+        ).join(', ')}.`,
+      );
+    }
+
     const user = await this.usersService.findOneWithRelations(userId, [
       'groups',
     ]);
@@ -168,10 +225,17 @@ export class TweetsService {
     const nowStamp = Date.now() / 1000;
     // Here we create timeStamp range (creation date range) of tweets we want to fetch
     // These parameters could also be added to GraphQL params if needed
-    //toStamp is timestamp to which tweets must be fetched
+    // toStamp is timestamp to which tweets must be fetched
     const toStamp = nowStamp;
-    //fromStamp is timestamp from which tweets must be fetched
+    // fromStamp is timestamp from which tweets must be fetched
     const fromStamp = nowStamp - 7 * 86400;
+
+    // I've considered the limit to fetch items from cache 10 times bigger that the given limit
+    // to have more space to find matched tweets if tweet has filters
+    let fetchLimit = limit * 10;
+    if (!filter) {
+      fetchLimit = limit * 2;
+    }
 
     // Fetch tweet IDs (public + private for the user)
     const publicTweetCachedItems =
@@ -179,17 +243,17 @@ export class TweetsService {
         fromStamp,
         toStamp,
         offset,
-        limit * 2,
+        fetchLimit,
       );
 
-    let privateTweetCachedItems: { score: number; item: string }[] = [];
+    let privateTweetCachedItems: TweetKey[] = [];
     for (const group of user.groups) {
       const fetchedItems = await this.CacheService.paginatePrivateTweetIds(
         group.id,
         fromStamp,
         toStamp,
         offset,
-        limit * 2,
+        fetchLimit,
       );
 
       privateTweetCachedItems = [...privateTweetCachedItems, ...fetchedItems];
@@ -201,7 +265,7 @@ export class TweetsService {
         fromStamp,
         toStamp,
         offset,
-        limit * 2,
+        fetchLimit,
       );
 
     // Combine and deduplicate tweet IDs
@@ -215,16 +279,27 @@ export class TweetsService {
 
     // Create a map to filter out duplicate items by id
     const uniqueTweetCachedItems = Array.from(
-      new Map(allTweetCachedItems.map((item) => [item.item, item])).values(),
+      new Map(allTweetCachedItems.map((item) => [item.id, item])).values(),
     );
 
     // Sort tweets by createdAt in descending order (based on their score which is tweet's created at stamp stored in cache layer)
-    uniqueTweetCachedItems.sort((a, b) => b.score - a.score);
+    uniqueTweetCachedItems.sort(
+      (a, b) => b.creationTimeStamp - a.creationTimeStamp,
+    );
+
+    // Filtering tweets
+    let filteredUniqueTweetCachedItems = uniqueTweetCachedItems;
+    if (filter) {
+      filteredUniqueTweetCachedItems = await this.filterTweets(
+        uniqueTweetCachedItems,
+        filter,
+      );
+    }
 
     // Fetch tweets by ID using getCachedTweet
     const tweets = await Promise.all(
-      uniqueTweetCachedItems.map((itemKey) =>
-        this.getCachedTweet(itemKey.item.split('_')[0]),
+      filteredUniqueTweetCachedItems.map((item) =>
+        this.getCachedTweet(item.id),
       ),
     );
 
@@ -475,6 +550,7 @@ export class TweetsService {
       viewPermissionsGroupIds,
       0,
     );
+
     if (tweetViewPermissions.length == 2) {
       // public tweet
       publicViewableTweet = true;
@@ -531,18 +607,24 @@ export class TweetsService {
     if (publicViewableTweet) {
       this.CacheService.addPublicViewableTweetToZSet(
         updatedTweet.id,
+        updatedTweet.author.id,
         updatedTweet.hashtags.map((hashtag) => hashtag.name),
         updatedTweet.category,
+        updatedTweet.location,
         Math.round(updatedTweet.createdAt.getTime() / 1000),
+        updatedTweet.parentTweet ? updatedTweet.parentTweet.id : '-1',
       );
     } else {
       updatedTweet.viewableGroups.forEach((group) => {
         this.CacheService.addPrivateViewableTweetToZSet(
           group.id,
           updatedTweet.id,
+          updatedTweet.author.id,
           updatedTweet.hashtags.map((hashtag) => hashtag.name),
           updatedTweet.category,
+          updatedTweet.location,
           Math.round(updatedTweet.createdAt.getTime() / 1000),
+          updatedTweet.parentTweet ? updatedTweet.parentTweet.id : '-1',
         );
       });
     }

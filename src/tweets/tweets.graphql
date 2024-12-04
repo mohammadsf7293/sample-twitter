@@ -13,7 +13,7 @@ type Query {
   # Checking editability of a tweet by a special userId
   canEditTweet(userId: Int!, tweetId: String!): Boolean!
 
-  paginateTweets(userId: Int!, limit: Int!, page: Int!): PaginatedTweets!
+  paginateTweets(userId: Int!, limit: Int!, page: Int!, filter: FilterTweet): PaginatedTweets!
 }
 
 type Mutation {
@@ -98,4 +98,31 @@ input UpdateTweetPermissions {
   A list of group IDs that have edit permissions for the tweet.
   """
   editPermissionsGroupIds: [Int!]!
+}
+
+input FilterTweet {
+	"""
+	If provided, filter tweets by Author ID
+	"""
+	authorId: String
+	
+	"""
+	If provided, filter tweets by the given hashtag
+	"""
+	hashtag: String
+	
+	"""
+	If provided, filter tweets that are direct reply to the given tweet ID
+	"""
+	parentTweetId: String
+	
+	"""
+	If provided, filter tweets by category
+	"""
+	category: TweetCategory
+	
+	"""
+	If provided, filter tweets by location
+	"""
+	location: String
 }
