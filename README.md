@@ -1,10 +1,6 @@
 # Simple Twitter (X) Permission System
 
 ## Description
-<p align="center">
- <img src="https://ipfs.io/ipfs/Qmc6C8KDSKZ3GSuMQza9fWQDMvk7AAxrk5eP8DCCjfxLLE" style="width:25vw;border-radius:25px;" alt="Project Logo" />
-</p>
-
 This project is a simplified server application inspired by Twitter (X) using `NestJS`, its `TypeORM` ,and `GraphQL`, focusing on implementing a **permission system** for tweets. It aims to replicate the permission functionalities of Twitter, where the author can control who can view or edit their tweets.  
 
 ### Permission System Overview
