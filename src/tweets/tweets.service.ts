@@ -198,7 +198,6 @@ export class TweetsService {
     page: number,
     filter?: FilterTweet,
   ): Promise<{ nodes: Tweet[]; hasNextPage: boolean }> {
-
     // Validate the tweet category
     if (
       filter &&
