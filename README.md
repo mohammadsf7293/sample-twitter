@@ -1,6 +1,6 @@
 # Simple Twitter (X) Permission System
 <p align="center">
-  <img src="https://purple-capable-anteater-361.mypinata.cloud/ipfs/bafkreihpbqbvyldpws34mpg43sux3u6q5bel4k2ga5mzt342ybbzs4u4zq" alt="Description" width="50%" />
+    <img src="https://ipfs.io/ipfs/bafybeihxcqusd47fodxhfmbwwn2xlczmm5kagnofaqnmyb2kbgttjb3toa" alt="X logo" style="border-radius:10%" >
 </p>
 
 ## Description
