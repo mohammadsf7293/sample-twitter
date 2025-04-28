@@ -133,6 +133,32 @@ Instead of querying MySQL for every user feed request:
 
 ---
 
+### Environment Variables
+
+This project uses environment variables for configuration. The database and Redis credentials are stored in `.env` files:
+
+- `.env`: Contains the main environment variables for development
+- `test.env`: Contains environment variables for testing
+
+These files are tracked in the repository for demonstration purposes, but in a real production environment, you should add them to `.gitignore` to keep sensitive information secure.
+
+#### Available Environment Variables
+
+| Variable | Description |
+|----------|-------------|
+| DB_HOST | MySQL database host |
+| DB_PORT | MySQL database port |
+| DB_USERNAME | MySQL database username |
+| DB_PASSWORD | MySQL database password |
+| DB_DATABASE | MySQL database name |
+| REDIS_HOST | Redis host |
+| REDIS_PORT | Redis port |
+| TEST_DB_HOST | Test MySQL database host |
+| TEST_DB_PORT | Test MySQL database port |
+| TEST_DB_USERNAME | Test MySQL database username |
+| TEST_DB_PASSWORD | Test MySQL database password |
+| TEST_DB_DATABASE | Test MySQL database name |
+
 ### Future Improvements
 - **Adding "Seen" Feature**: By introducing a "seen" feature with a `seen` table (a relation between `user_id` and `tweet_id`) and leveraging Redis caching mechanisms (using data structures like ZSET or SET), we can prevent the display of repetitive tweets that users have already seen.
 

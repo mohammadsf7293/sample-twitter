@@ -5,22 +5,22 @@ services:
     image: mysql:8
     restart: always
     environment:
-      MYSQL_ROOT_PASSWORD: root
-      MYSQL_DATABASE: test
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
+      MYSQL_DATABASE: ${DB_DATABASE}
     ports:
-      - "3306:3306"
+      - "${DB_PORT}:3306"
 
   db-test:
     image: mysql:8
     restart: always
     environment:
-      MYSQL_ROOT_PASSWORD: root
-      MYSQL_DATABASE: test
+      MYSQL_ROOT_PASSWORD: ${TEST_DB_PASSWORD}
+      MYSQL_DATABASE: ${TEST_DB_DATABASE}
     ports:
-      - "3307:3306"
+      - "${TEST_DB_PORT}:3306"
 
   redis:
     image: redis:7
     restart: always
     ports:
-      - "6379:6379"
+      - "${REDIS_PORT}:6379"
